@@ -1,5 +1,6 @@
 import { GetStaticProps } from "next";
 import { useEffect } from "react";
+import Image from "next/image";
 import DynamicForm from "@/components/DynamicForm";
 import type { GoogleForm } from "@/types/googleForms";
 import { extractFormId } from "@/lib/googleForms";
@@ -85,7 +86,7 @@ export default function Home({ form, error }: HomeProps) {
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.error || "Failed to submit form");
+        throw new Error(result.error || "提交表單失敗");
       }
 
       console.log("Form submitted successfully to Google Sheet");
@@ -98,20 +99,24 @@ export default function Home({ form, error }: HomeProps) {
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-4">
-            Google Forms Dynamic Renderer
-          </h1>
+        <div className="mb-8 flex justify-center">
+          <Image
+            src="/purensol.png"
+            alt="Pure n Sol"
+            width={300}
+            height={150}
+            className="object-contain"
+            priority
+          />
         </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <p className="text-red-800 font-medium">Error</p>
+            <p className="text-red-800 font-medium">錯誤</p>
             <p className="text-red-600 text-sm mt-1">{error}</p>
             <p className="text-red-600 text-xs mt-2">
-              Please check your Google Cloud Platform setup and ensure the form
-              is shared with your service account. See the README for
-              instructions.
+              請檢查您的 Google Cloud Platform
+              設定，並確保表單已與您的服務帳號共用。請參閱 README 以取得說明。
             </p>
           </div>
         )}
@@ -121,7 +126,7 @@ export default function Home({ form, error }: HomeProps) {
         {!form && !error && (
           <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 text-center">
             <p className="text-gray-600">
-              No form data available. Please check your configuration.
+              沒有可用的表單資料。請檢查您的設定。
             </p>
           </div>
         )}
@@ -142,8 +147,7 @@ export const getStaticProps: GetStaticProps<HomeProps> = async () => {
       return {
         props: {
           form: null,
-          error:
-            "Invalid form URL. Please check GOOGLE_FORM_URL environment variable.",
+          error: "無效的表單網址。請檢查 GOOGLE_FORM_URL 環境變數。",
         },
       };
     }
@@ -163,7 +167,7 @@ export const getStaticProps: GetStaticProps<HomeProps> = async () => {
   } catch (error) {
     console.error("Error in getStaticProps:", error);
     const errorMessage =
-      error instanceof Error ? error.message : "Failed to fetch form data";
+      error instanceof Error ? error.message : "無法取得表單資料";
     return {
       props: {
         form: null,

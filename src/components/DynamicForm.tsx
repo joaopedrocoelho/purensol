@@ -301,7 +301,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                   <div key={q.questionId} className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       {q.choiceQuestion.options?.[0]?.value ||
-                        `Question ${qIdx + 1}`}
+                        `問題 ${qIdx + 1}`}
                       {isRequired && (
                         <span className="text-red-500 ml-1">*</span>
                       )}
@@ -311,7 +311,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                         {...register(fieldName, { required: isRequired })}
                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       >
-                        <option value="">Select an option</option>
+                        <option value="">請選擇選項</option>
                         {options.map((option, idx) => (
                           <option key={idx} value={option.value}>
                             {option.value}
@@ -358,9 +358,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                       </div>
                     )}
                     {errors[fieldName] && (
-                      <p className="mt-1 text-sm text-red-600">
-                        This field is required
-                      </p>
+                      <p className="mt-1 text-sm text-red-600">此欄位為必填</p>
                     )}
                   </div>
                 );
@@ -372,7 +370,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                 return (
                   <div key={q.questionId} className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Text Question {qIdx + 1}
+                      文字問題 {qIdx + 1}
                       {isRequired && (
                         <span className="text-red-500 ml-1">*</span>
                       )}
@@ -382,20 +380,18 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                         {...register(fieldName, { required: isRequired })}
                         rows={4}
                         className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter your answer..."
+                        placeholder="請輸入您的答案..."
                       />
                     ) : (
                       <input
                         type="text"
                         {...register(fieldName, { required: isRequired })}
                         className="w-full px-4 py-2 border border-gray-300 text-black rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter your answer..."
+                        placeholder="請輸入您的答案..."
                       />
                     )}
                     {errors[fieldName] && (
-                      <p className="mt-1 text-sm text-red-600">
-                        This field is required
-                      </p>
+                      <p className="mt-1 text-sm text-red-600">此欄位為必填</p>
                     )}
                   </div>
                 );
@@ -856,9 +852,9 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return (
       <div className="max-w-2xl mx-auto p-6 bg-green-50 border border-green-200 rounded-lg">
         <h2 className="text-xl font-semibold text-green-800 mb-2">
-          Form Submitted Successfully!
+          表單提交成功！
         </h2>
-        <p className="text-green-700">Thank you for your submission.</p>
+        <p className="text-green-700">感謝您的提交。</p>
       </div>
     );
   }
@@ -889,7 +885,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
               disabled={isSubmitting}
               className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {isSubmitting ? "Submitting..." : "Submit"}
+              {isSubmitting ? "提交中..." : "提交"}
             </button>
           </div>
         </div>
@@ -901,7 +897,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
           <div className="max-w-4xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total</p>
+                <p className="text-sm text-gray-600">總計</p>
                 <p className="text-2xl font-bold text-gray-900">
                   ${total.toLocaleString()}
                 </p>
@@ -914,7 +910,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                     }
                     return count + (value ? 1 : 0);
                   }, 0)}{" "}
-                  item(s) selected
+                  個已選擇的項目
                 </p>
               </div>
             </div>

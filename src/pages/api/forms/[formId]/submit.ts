@@ -242,7 +242,7 @@ export default async function handler(
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
-      error: "Method not allowed. Use POST to submit form responses.",
+      error: "方法不允許。請使用 POST 方法提交表單回應。",
     });
   }
 
@@ -252,7 +252,7 @@ export default async function handler(
   if (!formIdOrUrl || typeof formIdOrUrl !== "string") {
     return res.status(400).json({
       success: false,
-      error: "Form ID or URL is required",
+      error: "需要表單 ID 或網址",
     });
   }
 
@@ -265,7 +265,7 @@ export default async function handler(
   if (!targetSpreadsheetUrl || typeof targetSpreadsheetUrl !== "string") {
     return res.status(400).json({
       success: false,
-      error: "Spreadsheet URL is required",
+      error: "需要試算表網址",
     });
   }
 
@@ -275,7 +275,7 @@ export default async function handler(
   if (!formDataToProcess || typeof formDataToProcess !== "object") {
     return res.status(400).json({
       success: false,
-      error: "Form data is required in the request body",
+      error: "請求主體中需要表單資料",
     });
   }
 
@@ -285,7 +285,7 @@ export default async function handler(
     if (!formId) {
       return res.status(400).json({
         success: false,
-        error: "Invalid form URL or ID",
+        error: "無效的表單網址或 ID",
       });
     }
 
@@ -294,7 +294,7 @@ export default async function handler(
     if (!spreadsheetId) {
       return res.status(400).json({
         success: false,
-        error: "Invalid spreadsheet URL",
+        error: "無效的試算表網址",
       });
     }
 
@@ -326,7 +326,7 @@ export default async function handler(
       error instanceof Error ? error.message : "Failed to submit form response";
     return res.status(500).json({
       success: false,
-      error: errorMessage,
+      error: errorMessage || "提交表單回應失敗",
     });
   }
 }
