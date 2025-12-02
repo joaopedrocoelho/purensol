@@ -29,8 +29,8 @@ function extractSpreadsheetId(url: string): string | null {
 }
 
 /**
- * Transforms form data to match the simplified Google Sheet column structure
- * Columns: 時間戳記, 電子郵件地址, 全名, Line顯示名稱, IG/FB帳號, Email, Products, Gifts, Total
+ * Transforms form data to match the Google Sheet column structure
+ * Each product gets its own column matching the item title
  */
 function transformFormDataToSheetRow(
   formData: Record<string, unknown>,
@@ -44,13 +44,21 @@ function transformFormDataToSheetRow(
     (item) => item.title?.includes("✦滿額贈✦") || item.title?.includes("滿額贈")
   )?.questionItem?.question?.questionId;
 
+  // Find total column and gift column
+  const totalColumnHeader = headers.find(
+    (h) => h.includes("初步計算金額") || h.includes("金額")
+  );
+  const giftColumnHeader = headers.find(
+    (h) => h.includes("✦滿額贈✦") || h.includes("滿額贈")
+  );
+
   // Extract basic info fields
   let fullName = "";
   let lineName = "";
   let igFbAccount = "";
   let emailField = "";
 
-  // Collect products grouped by title: Map<title, selected values[]>
+  // Map each product item title to its selected values
   const productsByTitle = new Map<string, string[]>();
   const gifts: string[] = [];
 
@@ -118,8 +126,7 @@ function transformFormDataToSheetRow(
       return;
     }
 
-    // Everything else is a product (skip info fields and gifts)
-    // Group products by their item title
+    // Everything else is a product - store values by item title
     if (Array.isArray(value)) {
       const productValues = value
         .map((v) => String(v))
@@ -135,13 +142,6 @@ function transformFormDataToSheetRow(
     }
   });
 
-  // Format products as "title: value1, value2"
-  const products = Array.from(productsByTitle.entries()).map(
-    ([title, values]) => {
-      return `${title} : ${values.join(", ")}`;
-    }
-  );
-
   // Create timestamp
   const timestamp = new Date().toLocaleString("zh-TW", {
     year: "numeric",
@@ -156,36 +156,79 @@ function transformFormDataToSheetRow(
   // Build row matching header order
   const row: (string | number)[] = [];
   headers.forEach((header) => {
-    switch (header) {
-      case "時間戳記":
-        row.push(timestamp);
+    // Handle timestamp
+    if (header === "時間戳記") {
+      row.push(timestamp);
+      return;
+    }
+
+    // Handle email address
+    if (header === "電子郵件地址") {
+      row.push(email || emailField || "");
+      return;
+    }
+
+    // Handle basic info fields
+    if (header.includes("全名") || header.match(/^1\./)) {
+      row.push(fullName);
+      return;
+    }
+    if (header.includes("Line") || header.match(/^2\./)) {
+      row.push(lineName);
+      return;
+    }
+    if (
+      header.includes("IG") ||
+      header.includes("FB") ||
+      header.match(/^3\./)
+    ) {
+      row.push(igFbAccount);
+      return;
+    }
+    if (header.includes("Email") && !header.includes("電子郵件")) {
+      row.push(emailField || email || "");
+      return;
+    }
+
+    // Handle total column
+    if (header === totalColumnHeader || header.includes("初步計算金額")) {
+      row.push(total);
+      return;
+    }
+
+    // Handle gift column
+    if (header === giftColumnHeader || header.includes("✦滿額贈✦")) {
+      row.push(gifts.join(", "));
+      return;
+    }
+
+    // Handle product columns - match by item title
+    // Try exact match first
+    if (productsByTitle.has(header)) {
+      const values = productsByTitle.get(header) || [];
+      row.push(values.join(", "));
+      return;
+    }
+
+    // Try partial match (in case headers have extra formatting)
+    let matched = false;
+    for (const [itemTitle, values] of productsByTitle.entries()) {
+      // Check if header contains the item title or vice versa
+      if (
+        header.includes(itemTitle) ||
+        itemTitle.includes(header) ||
+        header.replace(/[^\w\u4e00-\u9fff]/g, "") ===
+          itemTitle.replace(/[^\w\u4e00-\u9fff]/g, "")
+      ) {
+        row.push(values.join(", "));
+        matched = true;
         break;
-      case "電子郵件地址":
-        row.push(email || emailField || "");
-        break;
-      case "全名":
-        row.push(fullName);
-        break;
-      case "Line顯示名稱（請務必填寫正確）":
-        row.push(lineName);
-        break;
-      case "IG/FB帳號":
-        row.push(igFbAccount);
-        break;
-      case "Email":
-        row.push(emailField || email || "");
-        break;
-      case "Products":
-        row.push(products.join(", "));
-        break;
-      case "Gifts":
-        row.push(gifts.join(", "));
-        break;
-      case "Total":
-        row.push(total);
-        break;
-      default:
-        row.push("");
+      }
+    }
+
+    if (!matched) {
+      // Empty cell for columns that don't match
+      row.push("");
     }
   });
 
@@ -217,7 +260,7 @@ export default async function handler(
   const targetSpreadsheetUrl =
     spreadsheetUrl ||
     process.env.GOOGLE_SPREADSHEET_URL ||
-    "https://docs.google.com/spreadsheets/d/1c2vD11T__puDjLl6lwt36tfs5BW10xr4G2zFZ9XntHs";
+    "https://docs.google.com/spreadsheets/d/12jcjRLrytyxJsiQFYRiutUdRNEBcpjE6ms9MAy_TzwE";
 
   if (!targetSpreadsheetUrl || typeof targetSpreadsheetUrl !== "string") {
     return res.status(400).json({
