@@ -95,6 +95,26 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return giftItem?.questionItem?.question?.questionId || null;
   }, [form.items]);
 
+  // Create a set of text question IDs to exclude from count
+  const textQuestionIds = useMemo(() => {
+    const ids = new Set<string>();
+    form.items.forEach((item) => {
+      // Check questionItem
+      if (item.questionItem?.question?.textQuestion) {
+        ids.add(item.questionItem.question.questionId);
+      }
+      // Check questionGroupItem questions
+      if (item.questionGroupItem?.questions) {
+        item.questionGroupItem.questions.forEach((q) => {
+          if (q.textQuestion) {
+            ids.add(q.questionId);
+          }
+        });
+      }
+    });
+    return ids;
+  }, [form.items]);
+
   // Calculate total excluding the gift section
   const totalExcludingGift = useMemo(() => {
     let sum = 0;
@@ -278,7 +298,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     // Handle question groups with questions array (not grid)
     if (item.questionGroupItem?.questions && !item.questionGroupItem?.grid) {
       return (
-        <div key={item.itemId} className="mb-6">
+        <div key={item.itemId} className="mb-10">
           {item.title && (
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
               {item.title}
@@ -299,7 +319,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
                 return (
                   <div key={q.questionId} className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-md font-bold text-gray-700 mb-2">
                       {q.choiceQuestion.options?.[0]?.value ||
                         `問題 ${qIdx + 1}`}
                       {isRequired && (
@@ -369,7 +389,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                 const isParagraph = q.textQuestion.paragraph;
                 return (
                   <div key={q.questionId} className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-lg font-black text-gray-700 mb-2">
                       文字問題 {qIdx + 1}
                       {isRequired && (
                         <span className="text-red-500 ml-1">*</span>
@@ -436,8 +456,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       const isMultiple = type === "CHECKBOX";
 
       return (
-        <div key={item.itemId} className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div key={item.itemId} className="mb-10">
+          <label className="block text-lg font-black text-gray-700 mb-2">
             {item.title}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -543,8 +563,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       const isParagraph = question.textQuestion.paragraph;
 
       return (
-        <div key={item.itemId} className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div key={item.itemId} className="mb-10">
+          <label className="block text-lg font-black text-gray-700 mb-2">
             {item.title}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -588,8 +608,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       );
 
       return (
-        <div key={item.itemId} className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div key={item.itemId} className="mb-10">
+          <label className="block text-lg font-black text-gray-700 mb-2">
             {item.title}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -632,8 +652,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     // Handle date questions
     if (question.dateQuestion) {
       return (
-        <div key={item.itemId} className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div key={item.itemId} className="mb-10">
+          <label className="block text-lg font-black text-gray-700 mb-2">
             {item.title}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -657,8 +677,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     // Handle time questions
     if (question.timeQuestion) {
       return (
-        <div key={item.itemId} className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div key={item.itemId} className="mb-10">
+          <label className="block text-lg font-black text-gray-700 mb-2">
             {item.title}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -683,8 +703,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     // Handle file upload questions
     if (question.fileUploadQuestion) {
       return (
-        <div key={item.itemId} className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div key={item.itemId} className="mb-10">
+          <label className="block text-lg font-black text-gray-700 mb-2">
             {item.title}
             {isRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -736,8 +756,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       const gridIsRequired = questions[0]?.required || false;
 
       return (
-        <div key={item.itemId} className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div key={item.itemId} className="mb-10">
+          <label className="block text-lg font-black text-gray-700 mb-2">
             {item.title}
             {gridIsRequired && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -904,12 +924,27 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
               </div>
               <div className="text-right">
                 <p className="text-xs text-gray-500">
-                  {Object.values(formValues).reduce((count: number, value) => {
-                    if (Array.isArray(value)) {
-                      return count + value.length;
-                    }
-                    return count + (value ? 1 : 0);
-                  }, 0)}{" "}
+                  {Object.entries(formValues).reduce(
+                    (count: number, [fieldName, value]) => {
+                      // Extract question ID from field name (format: "question_<questionId>")
+                      const questionIdMatch = fieldName.match(
+                        /^question_(.+?)(?:_row_\d+_col_\d+)?$/
+                      );
+                      if (questionIdMatch) {
+                        const questionId = questionIdMatch[1];
+                        // Skip text questions
+                        if (textQuestionIds.has(questionId)) {
+                          return count;
+                        }
+                      }
+                      // Count non-text fields
+                      if (Array.isArray(value)) {
+                        return count + value.length;
+                      }
+                      return count + (value ? 1 : 0);
+                    },
+                    0
+                  )}{" "}
                   個已選擇的項目
                 </p>
               </div>
