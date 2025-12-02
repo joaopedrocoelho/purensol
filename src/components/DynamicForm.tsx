@@ -388,7 +388,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                       <input
                         type="text"
                         {...register(fieldName, { required: isRequired })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-2 border border-gray-300 text-black rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Enter your answer..."
                       />
                     )}
@@ -571,7 +571,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
             <input
               type="text"
               {...register(fieldName, { required: isRequired })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="text-black w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Enter your answer..."
             />
           )}
@@ -673,7 +673,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
           <input
             type={question.timeQuestion.duration ? "text" : "time"}
             {...register(fieldName, { required: isRequired })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="text-black w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             placeholder={question.timeQuestion.duration ? "HH:MM" : ""}
           />
 

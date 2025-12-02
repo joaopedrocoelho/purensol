@@ -1,5 +1,5 @@
 import { GetStaticProps } from "next";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import DynamicForm from "@/components/DynamicForm";
 import type { GoogleForm } from "@/types/googleForms";
 import { extractFormId } from "@/lib/googleForms";
@@ -16,9 +16,83 @@ export default function Home({ form, error }: HomeProps) {
   }, [form]);
 
   const handleSubmit = async (data: Record<string, unknown>) => {
-    console.log("Form data submitted:", data);
-    // Here you can add logic to submit to Google Forms API or your own backend
-    // Example: await submitToGoogleForms(form?.formId, data);
+    if (!form?.formId) {
+      console.error("No form ID available");
+      return;
+    }
+
+    // Calculate total from form data (same logic as in DynamicForm)
+    const extractPrice = (title: string | undefined): number | null => {
+      if (!title) return null;
+      const match = title.match(/\$(\d+)/);
+      return match ? parseInt(match[1], 10) : null;
+    };
+
+    let calculatedTotal = 0;
+    const giftQuestionId = form.items.find(
+      (item) =>
+        item.title?.includes("✦滿額贈✦") || item.title?.includes("滿額贈")
+    )?.questionItem?.question?.questionId;
+
+    Object.entries(data).forEach(([fieldName, value]) => {
+      const questionIdMatch = fieldName.match(
+        /^question_(.+?)(?:_row_\d+_col_\d+)?$/
+      );
+      if (!questionIdMatch) return;
+
+      const questionId = questionIdMatch[1];
+      if (questionId === giftQuestionId) return; // Skip gifts in total
+
+      const item = form.items.find(
+        (i) =>
+          i.questionItem?.question?.questionId === questionId ||
+          i.questionGroupItem?.questions?.some(
+            (q) => q.questionId === questionId
+          )
+      );
+
+      if (!item) return;
+
+      const itemPrice = extractPrice(item.title);
+
+      if (Array.isArray(value)) {
+        value.forEach((val) => {
+          if (val && String(val).trim()) {
+            const optionPrice = extractPrice(String(val));
+            calculatedTotal += optionPrice || itemPrice || 0;
+          }
+        });
+      } else if (value && String(value).trim()) {
+        const optionPrice = extractPrice(String(value));
+        calculatedTotal += optionPrice || itemPrice || 0;
+      }
+    });
+
+    try {
+      const response = await fetch(`/api/forms/${form.formId}/submit`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          formData: data,
+          total: calculatedTotal,
+          // You can optionally include email if you have it
+          // email: "user@example.com",
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || "Failed to submit form");
+      }
+
+      console.log("Form submitted successfully to Google Sheet");
+    } catch (error) {
+      console.error("Error submitting form:", error);
+      throw error; // Re-throw to let DynamicForm handle the error
+    }
   };
 
   return (
