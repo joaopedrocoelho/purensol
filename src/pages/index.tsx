@@ -1,78 +1,102 @@
-import Image from "next/image";
-import { Geist, Geist_Mono } from "next/font/google";
+import { GetStaticProps } from "next";
+import { useState, useEffect } from "react";
+import DynamicForm from "@/components/DynamicForm";
+import type { GoogleForm } from "@/types/googleForms";
+import { extractFormId } from "@/lib/googleForms";
+import { fetchGoogleFormWithAuth } from "@/lib/googleAuth";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+interface HomeProps {
+  form: GoogleForm | null;
+  error: string | null;
+}
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+export default function Home({ form, error }: HomeProps) {
+  useEffect(() => {
+    console.log(form);
+  }, [form]);
 
-export default function Home() {
+  const handleSubmit = async (data: Record<string, unknown>) => {
+    console.log("Form data submitted:", data);
+    // Here you can add logic to submit to Google Forms API or your own backend
+    // Example: await submitToGoogleForms(form?.formId, data);
+  };
+
   return (
-    <div
-      className={`${geistSans.className} ${geistMono.className} flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black`}
-    >
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the index.tsx file.
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-4">
+            Google Forms Dynamic Renderer
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs/pages/getting-started?utm_source=create-next-app&utm_medium=default-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <p className="text-red-800 font-medium">Error</p>
+            <p className="text-red-600 text-sm mt-1">{error}</p>
+            <p className="text-red-600 text-xs mt-2">
+              Please check your Google Cloud Platform setup and ensure the form
+              is shared with your service account. See the README for
+              instructions.
+            </p>
+          </div>
+        )}
+
+        {form && !error && <DynamicForm form={form} onSubmit={handleSubmit} />}
+
+        {!form && !error && (
+          <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 text-center">
+            <p className="text-gray-600">
+              No form data available. Please check your configuration.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+export const getStaticProps: GetStaticProps<HomeProps> = async () => {
+  // Default form URL - you can change this or make it configurable via env
+
+  try {
+    const formId = extractFormId(
+      "17uiIaF6yUdkhX4IK_u_Sr5UrttxS19-BiJRI-e-nOKo"
+    );
+
+    if (!formId) {
+      return {
+        props: {
+          form: null,
+          error:
+            "Invalid form URL. Please check GOOGLE_FORM_URL environment variable.",
+        },
+      };
+    }
+
+    // Fetch form data using authenticated client
+    const form = await fetchGoogleFormWithAuth(formId);
+
+    return {
+      props: {
+        form,
+        error: null,
+      },
+      // Revalidate every hour (3600 seconds)
+      // You can adjust this based on how often your form changes
+      revalidate: 3600,
+    };
+  } catch (error) {
+    console.error("Error in getStaticProps:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Failed to fetch form data";
+    return {
+      props: {
+        form: null,
+        error: errorMessage,
+      },
+      // Still revalidate on error so it can recover
+      revalidate: 60,
+    };
+  }
+};
