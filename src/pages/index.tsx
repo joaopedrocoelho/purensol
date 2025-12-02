@@ -5,6 +5,7 @@ import DynamicForm from "@/components/DynamicForm";
 import type { GoogleForm } from "@/types/googleForms";
 import { extractFormId } from "@/lib/googleForms";
 import { fetchGoogleFormWithAuth } from "@/lib/googleAuth";
+import Head from "next/head";
 
 interface HomeProps {
   form: GoogleForm | null;
@@ -98,6 +99,9 @@ export default function Home({ form, error }: HomeProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Head>
+        <title>Pure n Sol</title>
+      </Head>
       <div className="max-w-4xl mx-auto">
         <div className="mb-8 flex justify-center">
           <Image
