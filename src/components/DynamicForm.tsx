@@ -25,6 +25,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>();
   const [submitted, setSubmitted] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const [reviewData, setReviewData] = useState<FormValues | null>(null);
 
   // Watch all form values to calculate total
   const formValues = watch();
@@ -113,6 +115,52 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       }
     });
     return ids;
+  }, [form.items]);
+
+  // Create a map of option values to images
+  const optionImageMap = useMemo(() => {
+    const map = new Map<string, FormImage>();
+    form.items.forEach((item) => {
+      // Check questionItem options
+      if (item.questionItem?.question?.choiceQuestion?.options) {
+        item.questionItem.question.choiceQuestion.options.forEach((option) => {
+          if (option.image) {
+            map.set(option.value, option.image);
+          }
+        });
+      }
+      // Check questionGroupItem options
+      if (item.questionGroupItem?.questions) {
+        item.questionGroupItem.questions.forEach((q) => {
+          if (q.choiceQuestion?.options) {
+            q.choiceQuestion.options.forEach((option) => {
+              if (option.image) {
+                map.set(option.value, option.image);
+              }
+            });
+          }
+        });
+      }
+    });
+    return map;
+  }, [form.items]);
+
+  // Create a map of question IDs to item images
+  const questionItemImageMap = useMemo(() => {
+    const map = new Map<string, FormImage>();
+    form.items.forEach((item) => {
+      const image = item.questionItem?.image || item.questionGroupItem?.image;
+      if (image) {
+        if (item.questionItem?.question) {
+          map.set(item.questionItem.question.questionId, image);
+        } else if (item.questionGroupItem?.questions) {
+          item.questionGroupItem.questions.forEach((q) => {
+            map.set(q.questionId, image);
+          });
+        }
+      }
+    });
+    return map;
   }, [form.items]);
 
   // Calculate total excluding the gift section
@@ -855,12 +903,103 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return null;
   };
 
-  const onFormSubmit = async (data: FormValues) => {
+  // Extract selected products from review data
+  const getSelectedProducts = useMemo(() => {
+    if (!reviewData) return [];
+
+    const products: Array<{
+      name: string;
+      price: number;
+      image?: FormImage;
+    }> = [];
+
+    Object.entries(reviewData).forEach(([fieldName, value]) => {
+      // Extract question ID from field name
+      const questionIdMatch = fieldName.match(
+        /^question_(.+?)(?:_row_\d+_col_\d+)?$/
+      );
+      if (!questionIdMatch) return;
+
+      const questionId = questionIdMatch[1];
+
+      // Skip text questions and gift section
+      if (textQuestionIds.has(questionId) || questionId === giftQuestionId) {
+        return;
+      }
+
+      // Handle array values (checkboxes)
+      if (Array.isArray(value)) {
+        value.forEach((optionValue) => {
+          if (typeof optionValue === "string" && optionValue.trim() !== "") {
+            const optionPrice = optionPriceMap.get(optionValue);
+            const questionPrice = questionPriceMap.get(questionId);
+            const price =
+              optionPrice !== null && optionPrice !== undefined
+                ? optionPrice
+                : questionPrice !== null && questionPrice !== undefined
+                ? questionPrice
+                : null;
+
+            if (price !== null) {
+              const optionImage = optionImageMap.get(optionValue);
+              const itemImage = questionItemImageMap.get(questionId);
+              products.push({
+                name: optionValue,
+                price,
+                image: optionImage || itemImage,
+              });
+            }
+          }
+        });
+      } else if (value) {
+        // Handle single selection (radio or single checkbox)
+        if (typeof value === "string" && value.trim() !== "") {
+          const optionPrice = optionPriceMap.get(value);
+          const questionPrice = questionPriceMap.get(questionId);
+          const price =
+            optionPrice !== null && optionPrice !== undefined
+              ? optionPrice
+              : questionPrice !== null && questionPrice !== undefined
+              ? questionPrice
+              : null;
+
+          if (price !== null) {
+            const optionImage = optionImageMap.get(value);
+            const itemImage = questionItemImageMap.get(questionId);
+            products.push({
+              name: value,
+              price,
+              image: optionImage || itemImage,
+            });
+          }
+        }
+      }
+    });
+
+    return products;
+  }, [
+    reviewData,
+    textQuestionIds,
+    giftQuestionId,
+    optionPriceMap,
+    questionPriceMap,
+    optionImageMap,
+    questionItemImageMap,
+  ]);
+
+  const onFormNext = (data: FormValues) => {
+    setReviewData(data);
+    setShowReview(true);
+  };
+
+  const onReviewSubmit = async () => {
+    if (!reviewData) return;
+
     try {
       if (onSubmit) {
-        await onSubmit(data);
+        await onSubmit(reviewData);
       } else {
-        console.log("Form submitted:", data);
+        console.log("Form submitted:", reviewData);
       }
       setSubmitted(true);
     } catch (error) {
@@ -868,13 +1007,169 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     }
   };
 
-  if (submitted) {
+  const onReviewCancel = () => {
+    setShowReview(false);
+    setReviewData(null);
+  };
+
+  // Review screen - shows before submission
+  if (showReview && !submitted) {
+    const selectedProducts = getSelectedProducts;
+    const reviewTotal = selectedProducts.reduce(
+      (sum, product) => sum + product.price,
+      0
+    );
+
     return (
-      <div className="max-w-2xl mx-auto p-6 bg-green-50 border border-green-200 rounded-lg">
-        <h2 className="text-xl font-semibold text-green-800 mb-2">
-          表單提交成功！
-        </h2>
-        <p className="text-green-700">感謝您的提交。</p>
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">
+            確認您的訂單
+          </h2>
+
+          {selectedProducts.length > 0 ? (
+            <>
+              <div className="space-y-4 mb-6">
+                {selectedProducts.map((product, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg"
+                  >
+                    {product.image && (
+                      <div className="shrink-0">
+                        <img
+                          src={transformImageUrl(
+                            product.image.contentUri,
+                            product.image.properties?.width || 100
+                          )}
+                          alt={product.name}
+                          width={product.image.properties?.width || 100}
+                          className="rounded-lg shadow-sm w-20 h-20 object-cover"
+                          crossOrigin="anonymous"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-gray-900 font-medium truncate">
+                        {product.name}
+                      </p>
+                      <p className="text-gray-600 text-sm">
+                        ${product.price.toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="pt-4 border-t border-gray-200 mb-6">
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-semibold text-gray-900">
+                    總計
+                  </span>
+                  <span className="text-2xl font-bold text-gray-900">
+                    ${reviewTotal.toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              <div className="flex space-x-4">
+                <button
+                  type="button"
+                  onClick={onReviewCancel}
+                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={onReviewSubmit}
+                  disabled={isSubmitting}
+                  className="flex-1 px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isSubmitting ? "提交中..." : "提交"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-600 mb-6">您尚未選擇任何商品</p>
+              <button
+                type="button"
+                onClick={onReviewCancel}
+                className="px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              >
+                返回表單
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Success screen - shows after submission
+  if (submitted) {
+    const selectedProducts = getSelectedProducts;
+    const submissionTotal = selectedProducts.reduce(
+      (sum, product) => sum + product.price,
+      0
+    );
+
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold text-green-800 mb-2">
+            表單提交成功！
+          </h2>
+          <p className="text-green-700">感謝您的提交。</p>
+        </div>
+
+        {selectedProducts.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              已選擇的商品
+            </h3>
+            <div className="space-y-4 mb-6">
+              {selectedProducts.map((product, index) => (
+                <div
+                  key={index}
+                  className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg"
+                >
+                  {product.image && (
+                    <div className="shrink-0">
+                      <img
+                        src={transformImageUrl(
+                          product.image.contentUri,
+                          product.image.properties?.width || 100
+                        )}
+                        alt={product.name}
+                        width={product.image.properties?.width || 100}
+                        className="rounded-lg shadow-sm w-20 h-20 object-cover"
+                        crossOrigin="anonymous"
+                      />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-gray-900 font-medium truncate">
+                      {product.name}
+                    </p>
+                    <p className="text-gray-600 text-sm">
+                      ${product.price.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="pt-4 border-t border-gray-200">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-semibold text-gray-900">
+                  總計
+                </span>
+                <span className="text-2xl font-bold text-gray-900">
+                  ${submissionTotal.toLocaleString()}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -882,7 +1177,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   return (
     <>
       <form
-        onSubmit={handleSubmit(onFormSubmit)}
+        onSubmit={handleSubmit(onFormNext)}
         className={`max-w-2xl mx-auto ${total > 0 ? "pb-24" : ""}`}
       >
         <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
@@ -902,10 +1197,9 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
-              {isSubmitting ? "提交中..." : "提交"}
+              下一步
             </button>
           </div>
         </div>
