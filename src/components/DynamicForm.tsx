@@ -273,6 +273,13 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     totalExcludingGift,
   ]);
 
+  // Scroll to top when review screen is shown
+  useEffect(() => {
+    if (showReview) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, [showReview]);
+
   // Helper function to transform Google Forms image URLs to use our proxy API
   const transformImageUrl = (contentUri: string, width: number): string => {
     // Extract the path from the Google Forms URL
