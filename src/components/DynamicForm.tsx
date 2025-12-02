@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import type {
   GoogleForm,
@@ -19,9 +19,191 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
+    getValues,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>();
   const [submitted, setSubmitted] = useState(false);
+
+  // Watch all form values to calculate total
+  const formValues = watch();
+
+  // Extract price from item title (format: "$380 紫水晶金屬纏繞墜")
+  const extractPrice = (title: string | undefined): number | null => {
+    if (!title) return null;
+    const match = title.match(/\$(\d+)/);
+    return match ? parseInt(match[1], 10) : null;
+  };
+
+  // Create a map of question IDs to prices (from item title)
+  const questionPriceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    form.items.forEach((item) => {
+      const price = extractPrice(item.title);
+      if (price !== null) {
+        // Handle both questionItem and questionGroupItem
+        if (item.questionItem?.question) {
+          map.set(item.questionItem.question.questionId, price);
+        } else if (item.questionGroupItem?.questions) {
+          // For question groups, map all questions to the same price
+          item.questionGroupItem.questions.forEach((q) => {
+            map.set(q.questionId, price);
+          });
+        }
+      }
+    });
+    return map;
+  }, [form.items]);
+
+  // Create a map of option values to prices (from option values themselves)
+  const optionPriceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    form.items.forEach((item) => {
+      // Check questionItem options
+      if (item.questionItem?.question?.choiceQuestion?.options) {
+        item.questionItem.question.choiceQuestion.options.forEach((option) => {
+          const price = extractPrice(option.value);
+          if (price !== null) {
+            map.set(option.value, price);
+          }
+        });
+      }
+      // Check questionGroupItem options
+      if (item.questionGroupItem?.questions) {
+        item.questionGroupItem.questions.forEach((q) => {
+          if (q.choiceQuestion?.options) {
+            q.choiceQuestion.options.forEach((option) => {
+              const price = extractPrice(option.value);
+              if (price !== null) {
+                map.set(option.value, price);
+              }
+            });
+          }
+        });
+      }
+    });
+    return map;
+  }, [form.items]);
+
+  // Find the gift section question ID
+  const giftQuestionId = useMemo(() => {
+    const giftItem = form.items.find(
+      (item) =>
+        item.title?.includes("✦滿額贈✦") || item.title?.includes("滿額贈")
+    );
+    return giftItem?.questionItem?.question?.questionId || null;
+  }, [form.items]);
+
+  // Calculate total excluding the gift section
+  const totalExcludingGift = useMemo(() => {
+    let sum = 0;
+
+    Object.entries(formValues).forEach(([fieldName, value]) => {
+      // Extract question ID from field name (format: "question_<questionId>")
+      const questionIdMatch = fieldName.match(
+        /^question_(.+?)(?:_row_\d+_col_\d+)?$/
+      );
+      if (!questionIdMatch) return;
+
+      const questionId = questionIdMatch[1];
+
+      // Skip the gift section in this calculation
+      if (questionId === giftQuestionId) return;
+
+      const questionPrice = questionPriceMap.get(questionId);
+
+      // For checkboxes, react-hook-form returns an array when multiple are selected
+      // But it might also return a single string when only one is selected, or undefined when none
+      if (Array.isArray(value)) {
+        // Each selected checkbox option
+        value.forEach((optionValue) => {
+          if (typeof optionValue === "string" && optionValue.trim() !== "") {
+            // First check if the option value itself has a price
+            const optionPrice = optionPriceMap.get(optionValue);
+            if (optionPrice !== null && optionPrice !== undefined) {
+              sum += optionPrice;
+            } else if (questionPrice !== null && questionPrice !== undefined) {
+              // Fall back to question/item title price
+              sum += questionPrice;
+            }
+          }
+        });
+      } else if (value) {
+        // Handle single selection (radio or single checkbox)
+        if (typeof value === "string" && value.trim() !== "") {
+          // First check if the option value itself has a price
+          const optionPrice = optionPriceMap.get(value);
+          if (optionPrice !== null && optionPrice !== undefined) {
+            sum += optionPrice;
+          } else if (questionPrice !== null && questionPrice !== undefined) {
+            // Fall back to question/item title price
+            sum += questionPrice;
+          }
+        } else if (typeof value === "number" || typeof value === "boolean") {
+          // For non-string values, use question price if available
+          if (questionPrice !== null && questionPrice !== undefined) {
+            sum += questionPrice;
+          }
+        }
+      }
+    });
+
+    return sum;
+  }, [formValues, questionPriceMap, optionPriceMap, giftQuestionId]);
+
+  // Determine max allowed selections for gift section based on total
+  const maxGiftSelections = useMemo(() => {
+    if (totalExcludingGift < 2200) return 0;
+    if (totalExcludingGift < 4000) return 1;
+    if (totalExcludingGift < 5600) return 2;
+    if (totalExcludingGift < 6800) return 3;
+    return 4;
+  }, [totalExcludingGift]);
+
+  // Calculate total including everything (for display)
+  const total = useMemo(() => {
+    const sum = totalExcludingGift;
+
+    // Add gift section items if any
+    if (giftQuestionId) {
+      const giftFieldName = `question_${giftQuestionId}`;
+      const giftValue = formValues[giftFieldName];
+
+      if (Array.isArray(giftValue)) {
+        // Gift items don't have prices, so they don't add to total
+        // But we still count them for the selection limit
+      }
+    }
+
+    return sum;
+  }, [totalExcludingGift, formValues, giftQuestionId]);
+
+  // Enforce gift selection limit
+  useEffect(() => {
+    if (!giftQuestionId) return;
+
+    const giftFieldName = `question_${giftQuestionId}`;
+    const currentSelections = formValues[giftFieldName] as string[] | undefined;
+
+    if (
+      Array.isArray(currentSelections) &&
+      currentSelections.length > maxGiftSelections
+    ) {
+      // Trim selections to max allowed (keep the first N selections)
+      const trimmed = currentSelections.slice(0, maxGiftSelections);
+      setValue(giftFieldName, trimmed, {
+        shouldValidate: false,
+        shouldDirty: false,
+      });
+    }
+  }, [
+    maxGiftSelections,
+    giftQuestionId,
+    setValue,
+    formValues,
+    totalExcludingGift,
+  ]);
 
   // Helper function to transform Google Forms image URLs to use our proxy API
   const transformImageUrl = (contentUri: string, width: number): string => {
@@ -237,6 +419,21 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     const isRequired = question.required || false;
     const fieldName = `question_${questionId}`;
 
+    // Check if this is the gift section
+    const isGiftSection = questionId === giftQuestionId;
+    // Watch the specific field to get real-time updates
+    const watchedFieldValue = isGiftSection
+      ? watch(fieldName)
+      : formValues[fieldName];
+    const currentGiftSelections = isGiftSection
+      ? (watchedFieldValue as string[] | undefined)
+      : undefined;
+    const currentGiftCount = Array.isArray(currentGiftSelections)
+      ? currentGiftSelections.length
+      : 0;
+    const isGiftLimitReached =
+      isGiftSection && currentGiftCount >= maxGiftSelections;
+
     // Handle choice questions (radio, checkbox, dropdown)
     if (question.choiceQuestion) {
       const { type, options } = question.choiceQuestion;
@@ -250,6 +447,23 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
           </label>
           {item.description && (
             <p className="text-sm text-gray-500 mb-3">{item.description}</p>
+          )}
+
+          {/* Gift section limit message */}
+          {isGiftSection && (
+            <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+              <p className="text-sm text-yellow-800">
+                {totalExcludingGift < 2200
+                  ? "消費滿 $2,200 可選 1 項"
+                  : totalExcludingGift < 4000
+                  ? `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`
+                  : totalExcludingGift < 5600
+                  ? `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`
+                  : totalExcludingGift < 6800
+                  ? `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`
+                  : `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`}
+              </p>
+            </div>
           )}
 
           {/* Question item image */}
@@ -270,37 +484,54 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
             </select>
           ) : (
             <div className="space-y-3">
-              {options.map((option, idx) => (
-                <div key={idx} className="flex items-start space-x-3">
-                  <label className="flex items-start space-x-3 cursor-pointer flex-1">
-                    <input
-                      type={isMultiple ? "checkbox" : "radio"}
-                      {...register(fieldName, { required: isRequired })}
-                      value={option.value}
-                      className="mt-1 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <div className="flex-1">
-                      <span className="text-gray-700 block mb-2">
-                        {option.value}
-                      </span>
-                      {option.image && (
-                        <div className="mt-2">
-                          <img
-                            src={transformImageUrl(
-                              option.image.contentUri,
-                              option.image.properties?.width || 260
-                            )}
-                            alt={option.value}
-                            width={option.image.properties?.width || 260}
-                            className="rounded-lg shadow-sm max-w-full h-auto"
-                            crossOrigin="anonymous"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </label>
-                </div>
-              ))}
+              {options.map((option, idx) => {
+                const isOptionSelected = Array.isArray(currentGiftSelections)
+                  ? currentGiftSelections.includes(option.value)
+                  : false;
+                const isDisabled =
+                  isGiftSection && !isOptionSelected && isGiftLimitReached;
+
+                return (
+                  <div key={idx} className="flex items-start space-x-3">
+                    <label
+                      className={`flex items-start space-x-3 flex-1 ${
+                        isDisabled
+                          ? "cursor-not-allowed opacity-50"
+                          : "cursor-pointer"
+                      }`}
+                    >
+                      <input
+                        type={isMultiple ? "checkbox" : "radio"}
+                        {...register(fieldName, {
+                          required: isRequired,
+                        })}
+                        value={option.value}
+                        disabled={isDisabled}
+                        className="mt-1 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      />
+                      <div className="flex-1">
+                        <span className="text-gray-700 block mb-2">
+                          {option.value}
+                        </span>
+                        {option.image && (
+                          <div className="mt-2">
+                            <img
+                              src={transformImageUrl(
+                                option.image.contentUri,
+                                option.image.properties?.width || 260
+                              )}
+                              alt={option.value}
+                              width={option.image.properties?.width || 260}
+                              className="rounded-lg shadow-sm max-w-full h-auto"
+                              crossOrigin="anonymous"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -524,7 +755,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
           {effectiveRows.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="min-w-full border border-gray-300 rounded-md">
+              <table className="min-w-full border border-gray-300 rounded-md text-black">
                 <thead>
                   <tr>
                     <th className="px-4 py-2 border border-gray-300 bg-gray-50"></th>
@@ -633,31 +864,63 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit(onFormSubmit)} className="max-w-2xl mx-auto">
-      <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          {form.info.title}
-        </h1>
-        {form.info.description && (
-          <p className="text-gray-600 mb-6 whitespace-pre-line">
-            {form.info.description}
-          </p>
-        )}
+    <>
+      <form
+        onSubmit={handleSubmit(onFormSubmit)}
+        className={`max-w-2xl mx-auto ${total > 0 ? "pb-24" : ""}`}
+      >
+        <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            {form.info.title}
+          </h1>
+          {form.info.description && (
+            <p className="text-gray-600 mb-6 whitespace-pre-line">
+              {form.info.description}
+            </p>
+          )}
 
-        <div className="space-y-4">
-          {form.items.map((item) => renderQuestion(item))}
-        </div>
+          <div className="space-y-4">
+            {form.items.map((item) => renderQuestion(item))}
+          </div>
 
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {isSubmitting ? "Submitting..." : "Submit"}
-          </button>
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isSubmitting ? "Submitting..." : "Submit"}
+            </button>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
+
+      {/* Total Price Toaster */}
+      {
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg">
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Total</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  ${total.toLocaleString()}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs text-gray-500">
+                  {Object.values(formValues).reduce((count: number, value) => {
+                    if (Array.isArray(value)) {
+                      return count + value.length;
+                    }
+                    return count + (value ? 1 : 0);
+                  }, 0)}{" "}
+                  item(s) selected
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+    </>
   );
 }
