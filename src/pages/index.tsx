@@ -164,9 +164,9 @@ export const getStaticProps: GetStaticProps<HomeProps> = async () => {
         form,
         error: null,
       },
-      // Revalidate every hour (3600 seconds)
+      // Revalidate every hour (60 seconds)
       // You can adjust this based on how often your form changes
-      revalidate: 3600,
+      revalidate: 60,
     };
   } catch (error) {
     console.error("Error in getStaticProps:", error);
