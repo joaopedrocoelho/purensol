@@ -7,6 +7,8 @@ import type {
 } from "@/types/googleForms";
 import { getThresholds } from "./gifthreshold";
 import { log } from "@/lib/log";
+import { isSection } from "./issection";
+import StepIndicator from "./StepIndicator";
 
 interface DynamicFormProps {
   form: GoogleForm;
@@ -109,27 +111,72 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return item;
   }, [form.items]);
 
-  // Split form items into steps
-  const firstGiftItemIndex = useMemo(() => {
-    if (!firstGiftItem) return -1;
-    return form.items.findIndex((item) => item.itemId === firstGiftItem.itemId);
-  }, [form.items, firstGiftItem]);
+  // Helper function to check if an item has a question (can be rendered)
+  const hasQuestion = (item: GoogleFormItem): boolean => {
+    return !!(
+      item.questionItem?.question ||
+      item.questionGroupItem?.questions ||
+      item.pageBreakItem
+    );
+  };
 
-  const step1Items = useMemo(() => {
-    if (firstGiftItemIndex === -1) {
-      // If no gift item found, all items go to step 1
-      return form.items;
+  // Split form items into steps based on section headers (✦ x區 ✦)
+  const steps = useMemo(() => {
+    const stepArrays: GoogleFormItem[][] = [];
+    let currentStepItems: GoogleFormItem[] = [];
+
+    form.items.forEach((item) => {
+      const isSectionHeader = item.title ? isSection(item.title) : false;
+
+      if (isSectionHeader) {
+        // If we have accumulated items with questions, save them as a step
+        if (currentStepItems.length > 0) {
+          // Only add step if it has at least one question item (not just section headers)
+          const hasQuestions = currentStepItems.some(
+            (i) => hasQuestion(i) && !isSection(i.title || "")
+          );
+          if (hasQuestions) {
+            stepArrays.push([...currentStepItems]);
+          }
+          currentStepItems = [];
+        }
+        // Start a new step with this section header
+        currentStepItems.push(item);
+      } else {
+        // Add item to current step
+        currentStepItems.push(item);
+      }
+    });
+
+    // Don't forget the last step
+    if (currentStepItems.length > 0) {
+      // Only add step if it has at least one question item (not just section headers)
+      const hasQuestions = currentStepItems.some(
+        (i) => hasQuestion(i) && !isSection(i.title || "")
+      );
+      if (hasQuestions) {
+        stepArrays.push(currentStepItems);
+      }
     }
-    return form.items.slice(0, firstGiftItemIndex);
-  }, [form.items, firstGiftItemIndex]);
 
-  const step2Items = useMemo(() => {
-    if (firstGiftItemIndex === -1) {
-      // If no gift item found, step 2 is empty
+    // If no sections found, put all items in one step
+    if (stepArrays.length === 0) {
+      stepArrays.push([...form.items]);
+    }
+
+    return stepArrays;
+  }, [form.items]);
+
+  // Total number of form steps (excluding review step)
+  const totalFormSteps = steps.length;
+
+  // Get items for a specific step (1-indexed)
+  const getStepItems = (stepNumber: number): GoogleFormItem[] => {
+    if (stepNumber < 1 || stepNumber > totalFormSteps) {
       return [];
     }
-    return form.items.slice(firstGiftItemIndex);
-  }, [form.items, firstGiftItemIndex]);
+    return steps[stepNumber - 1] || [];
+  };
 
   const firstGiftQuestionId = useMemo(() => {
     return firstGiftItem?.questionItem?.question?.questionId || null;
@@ -1203,7 +1250,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
   const onFormNext = async (data: FormValues) => {
     // Validate only current step's fields
-    const itemsToValidate = currentStep === 1 ? step1Items : step2Items;
+    const itemsToValidate = getStepItems(currentStep);
     const fieldNamesToValidate: string[] = [];
 
     itemsToValidate.forEach((item) => {
@@ -1223,10 +1270,10 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       return; // Don't proceed if validation fails
     }
 
-    if (currentStep === 1) {
-      // Move to step 2 (gift section)
-      setCurrentStep(2);
-    } else if (currentStep === 2) {
+    if (currentStep < totalFormSteps) {
+      // Move to next step
+      setCurrentStep(currentStep + 1);
+    } else if (currentStep === totalFormSteps) {
       // Move to review step
       setReviewData(data);
       setShowReview(true);
@@ -1234,11 +1281,11 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   };
 
   const onStepBack = () => {
-    if (currentStep === 2) {
-      setCurrentStep(1);
-    } else if (showReview) {
+    if (showReview) {
       setShowReview(false);
       setReviewData(null);
+    } else if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
     }
   };
 
@@ -1260,7 +1307,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   const onReviewCancel = () => {
     setShowReview(false);
     setReviewData(null);
-    setCurrentStep(2);
+    setCurrentStep(totalFormSteps);
   };
 
   // Review screen - shows before submission
@@ -1426,7 +1473,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   }
 
   // Get items for current step
-  const currentStepItems = currentStep === 1 ? step1Items : step2Items;
+  const currentStepItems = getStepItems(currentStep);
 
   return (
     <>
@@ -1445,57 +1492,19 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
           )}
 
           {/* Step indicator */}
-          {firstGiftItemIndex !== -1 && (
-            <div className="mb-6">
-              <div className="flex items-center justify-center space-x-4">
-                <div className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                      currentStep >= 1
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-200 text-gray-600"
-                    }`}
-                  >
-                    1
-                  </div>
-                  <span className="ml-2 text-sm text-gray-600">選擇商品</span>
-                </div>
-                <div className="w-12 h-0.5 bg-gray-300"></div>
-                <div className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                      currentStep >= 2
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-200 text-gray-600"
-                    }`}
-                  >
-                    2
-                  </div>
-                  <span className="ml-2 text-sm text-gray-600">選擇贈品</span>
-                </div>
-                <div className="w-12 h-0.5 bg-gray-300"></div>
-                <div className="flex items-center">
-                  <div
-                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
-                      showReview
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-200 text-gray-600"
-                    }`}
-                  >
-                    3
-                  </div>
-                  <span className="ml-2 text-sm text-gray-600">確認訂單</span>
-                </div>
-              </div>
-            </div>
-          )}
+          <StepIndicator
+            steps={steps}
+            currentStep={currentStep}
+            totalFormSteps={totalFormSteps}
+            showReview={showReview}
+          />
 
           <div className="space-y-4">
             {currentStepItems.map((item) => renderQuestion(item))}
           </div>
 
           <div className="mt-8 pt-6 border-t border-gray-200 flex space-x-4">
-            {currentStep === 2 && (
+            {currentStep > 1 && (
               <button
                 type="button"
                 onClick={onStepBack}
@@ -1507,10 +1516,10 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
             <button
               type="submit"
               className={`${
-                currentStep === 2 ? "flex-1" : "w-full"
+                currentStep > 1 ? "flex-1" : "w-full"
               } px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors`}
             >
-              {currentStep === 2 ? "確認訂單" : "下一步"}
+              {currentStep === totalFormSteps ? "確認訂單" : "下一步"}
             </button>
           </div>
         </div>
