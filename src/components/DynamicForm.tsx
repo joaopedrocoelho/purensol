@@ -22,12 +22,13 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     handleSubmit,
     watch,
     setValue,
-    getValues,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>();
   const [submitted, setSubmitted] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [reviewData, setReviewData] = useState<FormValues | null>(null);
+  const [currentStep, setCurrentStep] = useState(1);
 
   // Watch all form values to calculate total
   const formValues = watch();
@@ -93,8 +94,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   const firstGiftItem = useMemo(() => {
     const item = form.items.find(
       (item) =>
-        item.title?.includes("✦第一階段滿額贈") ||
-        item.title?.includes("第一階段滿額贈")
+        item.title?.startsWith("✦第一階段滿額贈") ||
+        item.title?.startsWith("第一階段滿額贈")
     );
     if (!item) {
       console.warn(
@@ -106,6 +107,28 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     }
     return item;
   }, [form.items]);
+
+  // Split form items into steps
+  const firstGiftItemIndex = useMemo(() => {
+    if (!firstGiftItem) return -1;
+    return form.items.findIndex((item) => item.itemId === firstGiftItem.itemId);
+  }, [form.items, firstGiftItem]);
+
+  const step1Items = useMemo(() => {
+    if (firstGiftItemIndex === -1) {
+      // If no gift item found, all items go to step 1
+      return form.items;
+    }
+    return form.items.slice(0, firstGiftItemIndex);
+  }, [form.items, firstGiftItemIndex]);
+
+  const step2Items = useMemo(() => {
+    if (firstGiftItemIndex === -1) {
+      // If no gift item found, step 2 is empty
+      return [];
+    }
+    return form.items.slice(firstGiftItemIndex);
+  }, [form.items, firstGiftItemIndex]);
 
   const firstGiftQuestionId = useMemo(() => {
     return firstGiftItem?.questionItem?.question?.questionId || null;
@@ -414,9 +437,19 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   // Scroll to top when review screen is shown
   useEffect(() => {
     if (showReview) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      // Use setTimeout to ensure DOM has updated
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }, 100);
     }
   }, [showReview]);
+
+  // Scroll to top when changing steps
+  useEffect(() => {
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 100);
+  }, [currentStep]);
 
   // Helper function to transform Google Forms image URLs to use our proxy API
   const transformImageUrl = (contentUri: string, width: number): string => {
@@ -1167,9 +1200,45 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     questionItemImageMap,
   ]);
 
-  const onFormNext = (data: FormValues) => {
-    setReviewData(data);
-    setShowReview(true);
+  const onFormNext = async (data: FormValues) => {
+    // Validate only current step's fields
+    const itemsToValidate = currentStep === 1 ? step1Items : step2Items;
+    const fieldNamesToValidate: string[] = [];
+
+    itemsToValidate.forEach((item) => {
+      if (item.questionItem?.question) {
+        const questionId = item.questionItem.question.questionId;
+        fieldNamesToValidate.push(`question_${questionId}`);
+      } else if (item.questionGroupItem?.questions) {
+        item.questionGroupItem.questions.forEach((q) => {
+          fieldNamesToValidate.push(`question_${q.questionId}`);
+        });
+      }
+    });
+
+    // Trigger validation for current step's fields only
+    const isValid = await trigger(fieldNamesToValidate);
+    if (!isValid) {
+      return; // Don't proceed if validation fails
+    }
+
+    if (currentStep === 1) {
+      // Move to step 2 (gift section)
+      setCurrentStep(2);
+    } else if (currentStep === 2) {
+      // Move to review step
+      setReviewData(data);
+      setShowReview(true);
+    }
+  };
+
+  const onStepBack = () => {
+    if (currentStep === 2) {
+      setCurrentStep(1);
+    } else if (showReview) {
+      setShowReview(false);
+      setReviewData(null);
+    }
   };
 
   const onReviewSubmit = async () => {
@@ -1190,6 +1259,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   const onReviewCancel = () => {
     setShowReview(false);
     setReviewData(null);
+    setCurrentStep(2);
   };
 
   // Review screen - shows before submission
@@ -1256,7 +1326,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                   onClick={onReviewCancel}
                   className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
                 >
-                  取消
+                  上一頁
                 </button>
                 <button
                   type="button"
@@ -1354,6 +1424,9 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     );
   }
 
+  // Get items for current step
+  const currentStepItems = currentStep === 1 ? step1Items : step2Items;
+
   return (
     <>
       <form
@@ -1364,22 +1437,79 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
           <h1 className="text-2xl font-bold text-gray-900 mb-2">
             {form.info.title}
           </h1>
-          {form.info.description && (
+          {form.info.description && currentStep === 1 && (
             <p className="text-gray-600 mb-6 whitespace-pre-line">
               {form.info.description}
             </p>
           )}
 
+          {/* Step indicator */}
+          {firstGiftItemIndex !== -1 && (
+            <div className="mb-6">
+              <div className="flex items-center justify-center space-x-4">
+                <div className="flex items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                      currentStep >= 1
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-600"
+                    }`}
+                  >
+                    1
+                  </div>
+                  <span className="ml-2 text-sm text-gray-600">選擇商品</span>
+                </div>
+                <div className="w-12 h-0.5 bg-gray-300"></div>
+                <div className="flex items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                      currentStep >= 2
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-600"
+                    }`}
+                  >
+                    2
+                  </div>
+                  <span className="ml-2 text-sm text-gray-600">選擇贈品</span>
+                </div>
+                <div className="w-12 h-0.5 bg-gray-300"></div>
+                <div className="flex items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
+                      showReview
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-600"
+                    }`}
+                  >
+                    3
+                  </div>
+                  <span className="ml-2 text-sm text-gray-600">確認訂單</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-4">
-            {form.items.map((item) => renderQuestion(item))}
+            {currentStepItems.map((item) => renderQuestion(item))}
           </div>
 
-          <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="mt-8 pt-6 border-t border-gray-200 flex space-x-4">
+            {currentStep === 2 && (
+              <button
+                type="button"
+                onClick={onStepBack}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-800 font-medium rounded-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-colors"
+              >
+                上一步
+              </button>
+            )}
             <button
               type="submit"
-              className="w-full px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              className={`${
+                currentStep === 2 ? "flex-1" : "w-full"
+              } px-6 py-3 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors`}
             >
-              下一步
+              {currentStep === 2 ? "確認訂單" : "下一步"}
             </button>
           </div>
         </div>
