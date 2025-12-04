@@ -6,6 +6,7 @@ import type {
   Image as FormImage,
 } from "@/types/googleForms";
 import { getThresholds } from "./gifthreshold";
+import { log } from "@/lib/log";
 
 interface DynamicFormProps {
   form: GoogleForm;
@@ -98,12 +99,12 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
         item.title?.startsWith("第一階段滿額贈")
     );
     if (!item) {
-      console.warn(
+      log.warn(
         "First gift item not found. Available titles:",
         form.items.map((i) => i.title).filter(Boolean)
       );
     } else {
-      console.log("First gift item found:", item.title);
+      log.log("First gift item found:", item.title);
     }
     return item;
   }, [form.items]);
@@ -142,12 +143,12 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
         item.title?.includes("第二階段滿額贈")
     );
     if (!item) {
-      console.warn(
+      log.warn(
         "Second gift item not found. Available titles:",
         form.items.map((i) => i.title).filter(Boolean)
       );
     } else {
-      console.log("Second gift item found:", item.title);
+      log.log("Second gift item found:", item.title);
     }
     return item;
   }, [form.items]);
@@ -160,12 +161,12 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   const firstGiftThresholds = useMemo(() => {
     const thresholds = getThresholds(firstGiftItem?.title);
     if (firstGiftItem?.title && thresholds.length === 0) {
-      console.warn(
+      log.warn(
         "Failed to parse first gift thresholds from title:",
         firstGiftItem.title
       );
     } else if (thresholds.length > 0) {
-      console.log("First gift thresholds parsed:", thresholds);
+      log.log("First gift thresholds parsed:", thresholds);
     }
     return thresholds;
   }, [firstGiftItem]);
@@ -173,12 +174,12 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   const secondGiftThresholds = useMemo(() => {
     const thresholds = getThresholds(secondGiftItem?.title);
     if (secondGiftItem?.title && thresholds.length === 0) {
-      console.warn(
+      log.warn(
         "Failed to parse second gift thresholds from title:",
         secondGiftItem.title
       );
     } else if (thresholds.length > 0) {
-      console.log("Second gift thresholds parsed:", thresholds);
+      log.log("Second gift thresholds parsed:", thresholds);
     }
     return thresholds;
   }, [secondGiftItem]);
@@ -319,11 +320,11 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   // Determine max allowed selections for first gift section based on total and parsed thresholds
   const maxFirstGiftSelections = useMemo(() => {
     if (firstGiftThresholds.length === 0) {
-      console.warn("No first gift thresholds found, returning 0");
+      log.warn("No first gift thresholds found, returning 0");
       return 0;
     }
 
-    console.log("Calculating first gift selections:", {
+    log.log("Calculating first gift selections:", {
       totalExcludingGift,
       thresholds: firstGiftThresholds,
     });
@@ -331,14 +332,14 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     // Find the highest threshold that the total meets or exceeds
     for (let i = firstGiftThresholds.length - 1; i >= 0; i--) {
       if (totalExcludingGift >= firstGiftThresholds[i].amount) {
-        console.log(
+        log.log(
           `Total ${totalExcludingGift} >= ${firstGiftThresholds[i].amount}, returning ${firstGiftThresholds[i].gifts}`
         );
         return firstGiftThresholds[i].gifts;
       }
     }
 
-    console.log(
+    log.log(
       `Total ${totalExcludingGift} doesn't meet any threshold, returning 0`
     );
     return 0;
@@ -347,11 +348,11 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   // Determine max allowed selections for second gift section based on total and parsed thresholds
   const maxSecondGiftSelections = useMemo(() => {
     if (secondGiftThresholds.length === 0) {
-      console.warn("No second gift thresholds found, returning 0");
+      log.warn("No second gift thresholds found, returning 0");
       return 0;
     }
 
-    console.log("Calculating second gift selections:", {
+    log.log("Calculating second gift selections:", {
       totalExcludingGift,
       thresholds: secondGiftThresholds,
     });
@@ -359,14 +360,14 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     // Find the highest threshold that the total meets or exceeds
     for (let i = secondGiftThresholds.length - 1; i >= 0; i--) {
       if (totalExcludingGift >= secondGiftThresholds[i].amount) {
-        console.log(
+        log.log(
           `Total ${totalExcludingGift} >= ${secondGiftThresholds[i].amount}, returning ${secondGiftThresholds[i].gifts}`
         );
         return secondGiftThresholds[i].gifts;
       }
     }
 
-    console.log(
+    log.log(
       `Total ${totalExcludingGift} doesn't meet any threshold, returning 0`
     );
     return 0;
@@ -479,7 +480,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       return proxyPath;
     } catch (error) {
       // Fallback to original URL if parsing fails
-      console.error("Error parsing image URL:", error);
+      log.error("Error parsing image URL:", error);
       return contentUri;
     }
   };
@@ -994,7 +995,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
       // Safety checks
       if (!columns || !columns.options || !Array.isArray(columns.options)) {
-        console.warn("Invalid grid columns structure", item);
+        log.warn("Invalid grid columns structure", item);
         return null;
       }
 
@@ -1248,11 +1249,11 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       if (onSubmit) {
         await onSubmit(reviewData);
       } else {
-        console.log("Form submitted:", reviewData);
+        log.log("Form submitted:", reviewData);
       }
       setSubmitted(true);
     } catch (error) {
-      console.error("Error submitting form:", error);
+      log.error("Error submitting form:", error);
     }
   };
 

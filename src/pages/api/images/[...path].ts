@@ -1,4 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
+import { log } from "@/lib/log";
 
 export default async function handler(
   req: NextApiRequest,
@@ -64,7 +65,7 @@ export default async function handler(
     // Send the image
     return res.send(Buffer.from(imageBuffer));
   } catch (error) {
-    console.error("Error proxying image:", error);
+    log.error("Error proxying image:", error);
     return res.status(500).json({
       error: error instanceof Error ? error.message : "Failed to fetch image",
     });

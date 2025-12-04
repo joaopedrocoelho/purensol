@@ -1,5 +1,6 @@
 import { google, type Auth } from "googleapis";
 import type { GoogleForm } from "@/types/googleForms";
+import { log } from "./log";
 
 /**
  * Gets an authenticated Google Forms API client using a service account
@@ -27,7 +28,7 @@ export async function getAuthenticatedClient(): Promise<
       });
       return auth;
     } catch (error) {
-      console.error("Error parsing service account key:", error);
+      log.error("Error parsing service account key:", error);
       throw new Error("Invalid service account key format");
     }
   }

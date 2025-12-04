@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from "next";
 import { extractFormId } from "@/lib/googleForms";
 import { fetchGoogleFormWithAuth } from "@/lib/googleAuth";
 import type { GoogleForm } from "@/types/googleForms";
+import { log } from "@/lib/log";
 
 export default async function handler(
   req: NextApiRequest,
@@ -43,7 +44,7 @@ export default async function handler(
       throw authError;
     }
   } catch (error: any) {
-    console.error("Error fetching form:", error);
+    log.error("Error fetching form:", error);
     return res.status(500).json({
       error: error.message || "Failed to fetch form data",
     });

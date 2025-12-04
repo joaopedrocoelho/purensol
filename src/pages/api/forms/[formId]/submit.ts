@@ -6,6 +6,7 @@ import {
 } from "@/lib/googleAuth";
 import { extractFormId } from "@/lib/googleForms";
 import type { GoogleForm } from "@/types/googleForms";
+import { log } from "@/lib/log";
 
 interface SubmitResponse {
   success: boolean;
@@ -359,7 +360,7 @@ export default async function handler(
       success: true,
     });
   } catch (error) {
-    console.error("Error submitting form response:", error);
+    log.error("Error submitting form response:", error);
     const errorMessage =
       error instanceof Error ? error.message : "Failed to submit form response";
     return res.status(500).json({

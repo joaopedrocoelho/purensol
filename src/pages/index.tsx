@@ -6,6 +6,7 @@ import type { GoogleForm } from "@/types/googleForms";
 import { extractFormId } from "@/lib/googleForms";
 import { fetchGoogleFormWithAuth } from "@/lib/googleAuth";
 import Head from "next/head";
+import { log } from "@/lib/log";
 
 interface HomeProps {
   form: GoogleForm | null;
@@ -14,12 +15,12 @@ interface HomeProps {
 
 export default function Home({ form, error }: HomeProps) {
   useEffect(() => {
-    console.log(form);
+    log.log(form);
   }, [form]);
 
   const handleSubmit = async (data: Record<string, unknown>) => {
     if (!form?.formId) {
-      console.error("No form ID available");
+      log.error("No form ID available");
       return;
     }
 
@@ -100,9 +101,9 @@ export default function Home({ form, error }: HomeProps) {
         throw new Error(result.error || "提交表單失敗");
       }
 
-      console.log("Form submitted successfully to Google Sheet");
+      log.log("Form submitted successfully to Google Sheet");
     } catch (error) {
-      console.error("Error submitting form:", error);
+      log.error("Error submitting form:", error);
       throw error; // Re-throw to let DynamicForm handle the error
     }
   };
@@ -179,7 +180,7 @@ export const getStaticProps: GetStaticProps<HomeProps> = async () => {
       revalidate: 60,
     };
   } catch (error) {
-    console.error("Error in getStaticProps:", error);
+    log.error("Error in getStaticProps:", error);
     const errorMessage =
       error instanceof Error ? error.message : "無法取得表單資料";
     return {
