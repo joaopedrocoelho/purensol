@@ -39,17 +39,29 @@ function transformFormDataToSheetRow(
   total: number,
   email?: string
 ): (string | number)[] {
-  // Find gift question ID
-  const giftQuestionId = form.items.find(
-    (item) => item.title?.includes("✦滿額贈✦") || item.title?.includes("滿額贈")
+  // Find first gift question ID (第一階段滿額贈)
+  const firstGiftQuestionId = form.items.find(
+    (item) =>
+      item.title?.includes("✦第一階段滿額贈") ||
+      item.title?.includes("第一階段滿額贈")
   )?.questionItem?.question?.questionId;
 
-  // Find total column and gift column
+  // Find second gift question ID (第二階段滿額贈)
+  const secondGiftQuestionId = form.items.find(
+    (item) =>
+      item.title?.includes("✦第二階段滿額贈") ||
+      item.title?.includes("第二階段滿額贈")
+  )?.questionItem?.question?.questionId;
+
+  // Find total column and gift columns
   const totalColumnHeader = headers.find(
     (h) => h.includes("初步計算金額") || h.includes("金額")
   );
-  const giftColumnHeader = headers.find(
-    (h) => h.includes("✦滿額贈✦") || h.includes("滿額贈")
+  const firstGiftColumnHeader = headers.find(
+    (h) => h.includes("✦第一階段滿額贈") || h.includes("第一階段滿額贈")
+  );
+  const secondGiftColumnHeader = headers.find(
+    (h) => h.includes("✦第二階段滿額贈") || h.includes("第二階段滿額贈")
   );
 
   // Extract basic info fields
@@ -60,7 +72,8 @@ function transformFormDataToSheetRow(
 
   // Map each product item title to its selected values
   const productsByTitle = new Map<string, string[]>();
-  const gifts: string[] = [];
+  const firstGifts: string[] = [];
+  const secondGifts: string[] = [];
 
   // Process form data
   Object.entries(formData).forEach(([fieldName, value]) => {
@@ -113,15 +126,26 @@ function transformFormDataToSheetRow(
       return;
     }
 
-    // Check if it's the gift section
-    if (questionId === giftQuestionId) {
+    // Check if it's a gift section
+    if (questionId === firstGiftQuestionId) {
       if (Array.isArray(value)) {
         const giftValues = value
           .map((v) => String(v))
           .filter((v) => v && v !== "false" && v.trim() !== "");
-        gifts.push(...giftValues);
+        firstGifts.push(...giftValues);
       } else if (String(value) !== "false") {
-        gifts.push(String(value));
+        firstGifts.push(String(value));
+      }
+      return;
+    }
+    if (questionId === secondGiftQuestionId) {
+      if (Array.isArray(value)) {
+        const giftValues = value
+          .map((v) => String(v))
+          .filter((v) => v && v !== "false" && v.trim() !== "");
+        secondGifts.push(...giftValues);
+      } else if (String(value) !== "false") {
+        secondGifts.push(String(value));
       }
       return;
     }
@@ -196,9 +220,23 @@ function transformFormDataToSheetRow(
       return;
     }
 
-    // Handle gift column
-    if (header === giftColumnHeader || header.includes("✦滿額贈✦")) {
-      row.push(gifts.join(", "));
+    // Handle first gift column
+    if (
+      header === firstGiftColumnHeader ||
+      header.includes("✦第一階段滿額贈") ||
+      header.includes("第一階段滿額贈")
+    ) {
+      row.push(firstGifts.join(", "));
+      return;
+    }
+
+    // Handle second gift column
+    if (
+      header === secondGiftColumnHeader ||
+      header.includes("✦第二階段滿額贈") ||
+      header.includes("第二階段滿額贈")
+    ) {
+      row.push(secondGifts.join(", "));
       return;
     }
 

@@ -31,9 +31,15 @@ export default function Home({ form, error }: HomeProps) {
     };
 
     let calculatedTotal = 0;
-    const giftQuestionId = form.items.find(
+    const firstGiftQuestionId = form.items.find(
       (item) =>
-        item.title?.includes("✦滿額贈✦") || item.title?.includes("滿額贈")
+        item.title?.includes("✦第一階段滿額贈") ||
+        item.title?.includes("第一階段滿額贈")
+    )?.questionItem?.question?.questionId;
+    const secondGiftQuestionId = form.items.find(
+      (item) =>
+        item.title?.includes("✦第二階段滿額贈") ||
+        item.title?.includes("第二階段滿額贈")
     )?.questionItem?.question?.questionId;
 
     Object.entries(data).forEach(([fieldName, value]) => {
@@ -43,7 +49,11 @@ export default function Home({ form, error }: HomeProps) {
       if (!questionIdMatch) return;
 
       const questionId = questionIdMatch[1];
-      if (questionId === giftQuestionId) return; // Skip gifts in total
+      if (
+        questionId === firstGiftQuestionId ||
+        questionId === secondGiftQuestionId
+      )
+        return; // Skip gifts in total
 
       const item = form.items.find(
         (i) =>

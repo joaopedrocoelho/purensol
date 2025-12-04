@@ -5,6 +5,7 @@ import type {
   GoogleFormItem,
   Image as FormImage,
 } from "@/types/googleForms";
+import { getThresholds } from "./gifthreshold";
 
 interface DynamicFormProps {
   form: GoogleForm;
@@ -88,14 +89,76 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return map;
   }, [form.items]);
 
-  // Find the gift section question ID
-  const giftQuestionId = useMemo(() => {
-    const giftItem = form.items.find(
+  // Find the first gift section item and question ID (第一階段滿額贈)
+  const firstGiftItem = useMemo(() => {
+    const item = form.items.find(
       (item) =>
-        item.title?.includes("✦滿額贈✦") || item.title?.includes("滿額贈")
+        item.title?.includes("✦第一階段滿額贈") ||
+        item.title?.includes("第一階段滿額贈")
     );
-    return giftItem?.questionItem?.question?.questionId || null;
+    if (!item) {
+      console.warn(
+        "First gift item not found. Available titles:",
+        form.items.map((i) => i.title).filter(Boolean)
+      );
+    } else {
+      console.log("First gift item found:", item.title);
+    }
+    return item;
   }, [form.items]);
+
+  const firstGiftQuestionId = useMemo(() => {
+    return firstGiftItem?.questionItem?.question?.questionId || null;
+  }, [firstGiftItem]);
+
+  // Find the second gift section item and question ID (第二階段滿額贈)
+  const secondGiftItem = useMemo(() => {
+    const item = form.items.find(
+      (item) =>
+        item.title?.includes("✦第二階段滿額贈") ||
+        item.title?.includes("第二階段滿額贈")
+    );
+    if (!item) {
+      console.warn(
+        "Second gift item not found. Available titles:",
+        form.items.map((i) => i.title).filter(Boolean)
+      );
+    } else {
+      console.log("Second gift item found:", item.title);
+    }
+    return item;
+  }, [form.items]);
+
+  const secondGiftQuestionId = useMemo(() => {
+    return secondGiftItem?.questionItem?.question?.questionId || null;
+  }, [secondGiftItem]);
+
+  // Parse gift thresholds from titles
+  const firstGiftThresholds = useMemo(() => {
+    const thresholds = getThresholds(firstGiftItem?.title);
+    if (firstGiftItem?.title && thresholds.length === 0) {
+      console.warn(
+        "Failed to parse first gift thresholds from title:",
+        firstGiftItem.title
+      );
+    } else if (thresholds.length > 0) {
+      console.log("First gift thresholds parsed:", thresholds);
+    }
+    return thresholds;
+  }, [firstGiftItem]);
+
+  const secondGiftThresholds = useMemo(() => {
+    const thresholds = getThresholds(secondGiftItem?.title);
+    if (secondGiftItem?.title && thresholds.length === 0) {
+      console.warn(
+        "Failed to parse second gift thresholds from title:",
+        secondGiftItem.title
+      );
+    } else if (thresholds.length > 0) {
+      console.log("Second gift thresholds parsed:", thresholds);
+    }
+    return thresholds;
+  }, [secondGiftItem]);
 
   // Create a set of text question IDs to exclude from count
   const textQuestionIds = useMemo(() => {
@@ -176,8 +239,12 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
       const questionId = questionIdMatch[1];
 
-      // Skip the gift section in this calculation
-      if (questionId === giftQuestionId) return;
+      // Skip both gift sections in this calculation
+      if (
+        questionId === firstGiftQuestionId ||
+        questionId === secondGiftQuestionId
+      )
+        return;
 
       const questionPrice = questionPriceMap.get(questionId);
 
@@ -218,56 +285,127 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     });
 
     return sum;
-  }, [formValues, questionPriceMap, optionPriceMap, giftQuestionId]);
+  }, [
+    formValues,
+    questionPriceMap,
+    optionPriceMap,
+    firstGiftQuestionId,
+    secondGiftQuestionId,
+  ]);
 
-  // Determine max allowed selections for gift section based on total
-  const maxGiftSelections = useMemo(() => {
-    if (totalExcludingGift < 2200) return 0;
-    if (totalExcludingGift < 4000) return 1;
-    if (totalExcludingGift < 5600) return 2;
-    if (totalExcludingGift < 6800) return 3;
-    return 4;
-  }, [totalExcludingGift]);
+  // Determine max allowed selections for first gift section based on total and parsed thresholds
+  const maxFirstGiftSelections = useMemo(() => {
+    if (firstGiftThresholds.length === 0) {
+      console.warn("No first gift thresholds found, returning 0");
+      return 0;
+    }
+
+    console.log("Calculating first gift selections:", {
+      totalExcludingGift,
+      thresholds: firstGiftThresholds,
+    });
+
+    // Find the highest threshold that the total meets or exceeds
+    for (let i = firstGiftThresholds.length - 1; i >= 0; i--) {
+      if (totalExcludingGift >= firstGiftThresholds[i].amount) {
+        console.log(
+          `Total ${totalExcludingGift} >= ${firstGiftThresholds[i].amount}, returning ${firstGiftThresholds[i].gifts}`
+        );
+        return firstGiftThresholds[i].gifts;
+      }
+    }
+
+    console.log(
+      `Total ${totalExcludingGift} doesn't meet any threshold, returning 0`
+    );
+    return 0;
+  }, [totalExcludingGift, firstGiftThresholds]);
+
+  // Determine max allowed selections for second gift section based on total and parsed thresholds
+  const maxSecondGiftSelections = useMemo(() => {
+    if (secondGiftThresholds.length === 0) {
+      console.warn("No second gift thresholds found, returning 0");
+      return 0;
+    }
+
+    console.log("Calculating second gift selections:", {
+      totalExcludingGift,
+      thresholds: secondGiftThresholds,
+    });
+
+    // Find the highest threshold that the total meets or exceeds
+    for (let i = secondGiftThresholds.length - 1; i >= 0; i--) {
+      if (totalExcludingGift >= secondGiftThresholds[i].amount) {
+        console.log(
+          `Total ${totalExcludingGift} >= ${secondGiftThresholds[i].amount}, returning ${secondGiftThresholds[i].gifts}`
+        );
+        return secondGiftThresholds[i].gifts;
+      }
+    }
+
+    console.log(
+      `Total ${totalExcludingGift} doesn't meet any threshold, returning 0`
+    );
+    return 0;
+  }, [totalExcludingGift, secondGiftThresholds]);
 
   // Calculate total including everything (for display)
   const total = useMemo(() => {
     const sum = totalExcludingGift;
 
-    // Add gift section items if any
-    if (giftQuestionId) {
-      const giftFieldName = `question_${giftQuestionId}`;
-      const giftValue = formValues[giftFieldName];
-
-      if (Array.isArray(giftValue)) {
-        // Gift items don't have prices, so they don't add to total
-        // But we still count them for the selection limit
-      }
-    }
+    // Gift items don't have prices, so they don't add to total
+    // But we still count them for the selection limit
 
     return sum;
-  }, [totalExcludingGift, formValues, giftQuestionId]);
+  }, [totalExcludingGift]);
 
-  // Enforce gift selection limit
+  // Enforce first gift selection limit
   useEffect(() => {
-    if (!giftQuestionId) return;
+    if (!firstGiftQuestionId) return;
 
-    const giftFieldName = `question_${giftQuestionId}`;
+    const giftFieldName = `question_${firstGiftQuestionId}`;
     const currentSelections = formValues[giftFieldName] as string[] | undefined;
 
     if (
       Array.isArray(currentSelections) &&
-      currentSelections.length > maxGiftSelections
+      currentSelections.length > maxFirstGiftSelections
     ) {
       // Trim selections to max allowed (keep the first N selections)
-      const trimmed = currentSelections.slice(0, maxGiftSelections);
+      const trimmed = currentSelections.slice(0, maxFirstGiftSelections);
       setValue(giftFieldName, trimmed, {
         shouldValidate: false,
         shouldDirty: false,
       });
     }
   }, [
-    maxGiftSelections,
-    giftQuestionId,
+    maxFirstGiftSelections,
+    firstGiftQuestionId,
+    setValue,
+    formValues,
+    totalExcludingGift,
+  ]);
+
+  // Enforce second gift selection limit
+  useEffect(() => {
+    if (!secondGiftQuestionId) return;
+
+    const giftFieldName = `question_${secondGiftQuestionId}`;
+    const currentSelections = formValues[giftFieldName] as string[] | undefined;
+
+    if (
+      Array.isArray(currentSelections) &&
+      currentSelections.length > maxSecondGiftSelections
+    ) {
+      // Trim selections to max allowed (keep the first N selections)
+      const trimmed = currentSelections.slice(0, maxSecondGiftSelections);
+      setValue(giftFieldName, trimmed, {
+        shouldValidate: false,
+        shouldDirty: false,
+      });
+    }
+  }, [
+    maxSecondGiftSelections,
+    secondGiftQuestionId,
     setValue,
     formValues,
     totalExcludingGift,
@@ -490,8 +628,11 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     const isRequired = question.required || false;
     const fieldName = `question_${questionId}`;
 
-    // Check if this is the gift section
-    const isGiftSection = questionId === giftQuestionId;
+    // Check if this is a gift section
+    const isFirstGiftSection = questionId === firstGiftQuestionId;
+    const isSecondGiftSection = questionId === secondGiftQuestionId;
+    const isGiftSection = isFirstGiftSection || isSecondGiftSection;
+
     // Watch the specific field to get real-time updates
     const watchedFieldValue = isGiftSection
       ? watch(fieldName)
@@ -501,6 +642,13 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       : undefined;
     const currentGiftCount = Array.isArray(currentGiftSelections)
       ? currentGiftSelections.length
+      : 0;
+
+    // Determine which max selection limit to use
+    const maxGiftSelections = isFirstGiftSection
+      ? maxFirstGiftSelections
+      : isSecondGiftSection
+      ? maxSecondGiftSelections
       : 0;
     const isGiftLimitReached =
       isGiftSection && currentGiftCount >= maxGiftSelections;
@@ -524,15 +672,35 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
           {isGiftSection && (
             <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
               <p className="text-sm text-yellow-800">
-                {totalExcludingGift < 2200
-                  ? "消費滿 $2,200 可選 1 項"
-                  : totalExcludingGift < 4000
-                  ? `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`
-                  : totalExcludingGift < 5600
-                  ? `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`
-                  : totalExcludingGift < 6800
-                  ? `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`
-                  : `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`}
+                {isFirstGiftSection
+                  ? (() => {
+                      const thresholds = firstGiftThresholds;
+                      if (thresholds.length === 0) {
+                        return "無法解析贈品規則";
+                      }
+                      const firstThreshold = thresholds[0];
+                      if (totalExcludingGift < firstThreshold.amount) {
+                        return `消費滿 $${firstThreshold.amount.toLocaleString()} 可選 ${
+                          firstThreshold.gifts
+                        } 項`;
+                      }
+                      return `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`;
+                    })()
+                  : isSecondGiftSection
+                  ? (() => {
+                      const thresholds = secondGiftThresholds;
+                      if (thresholds.length === 0) {
+                        return "無法解析贈品規則";
+                      }
+                      const firstThreshold = thresholds[0];
+                      if (totalExcludingGift < firstThreshold.amount) {
+                        return `消費滿 $${firstThreshold.amount.toLocaleString()} 可選 ${
+                          firstThreshold.gifts
+                        } 項`;
+                      }
+                      return `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`;
+                    })()
+                  : null}
               </p>
             </div>
           )}
@@ -929,8 +1097,12 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
       const questionId = questionIdMatch[1];
 
-      // Skip text questions and gift section
-      if (textQuestionIds.has(questionId) || questionId === giftQuestionId) {
+      // Skip text questions and gift sections
+      if (
+        textQuestionIds.has(questionId) ||
+        questionId === firstGiftQuestionId ||
+        questionId === secondGiftQuestionId
+      ) {
         return;
       }
 
@@ -987,7 +1159,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   }, [
     reviewData,
     textQuestionIds,
-    giftQuestionId,
+    firstGiftQuestionId,
+    secondGiftQuestionId,
     optionPriceMap,
     questionPriceMap,
     optionImageMap,
