@@ -1,6 +1,7 @@
 import React from "react";
 import type { GoogleFormItem } from "@/types/googleForms";
 import { isSection } from "./issection";
+import { isGiftSection, stripGiftSectionPrefix } from "@/lib/utils";
 
 interface StepIndicatorProps {
   steps: GoogleFormItem[][];
@@ -27,12 +28,25 @@ export default function StepIndicator({
           const isActive = currentStep === stepNumber;
           const isCompleted = currentStep > stepNumber;
 
-          // Get step name from section header or default
+          // Get step name from section header or gift section
           const sectionItem = stepItems.find((item) =>
             item.title ? isSection(item.title) : false
           );
+          const giftItem = stepItems.find((item) => isGiftSection(item));
           let stepName = `步驟 ${stepNumber}`;
-          if (sectionItem?.title) {
+
+          if (giftItem?.title) {
+            // For gift sections, use the title without the prefix
+            const cleanTitle = stripGiftSectionPrefix(giftItem.title);
+            // Try to extract a meaningful name from the gift section title
+            // Pattern: "✦第一階段滿額贈..." -> "第一階段滿額贈"
+            const match = cleanTitle.match(/✦\s*(.+?)(?:。|✦)/);
+            if (match && match[1]) {
+              stepName = match[1].trim();
+            } else {
+              stepName = cleanTitle.substring(0, 20); // Use first 20 chars if no pattern match
+            }
+          } else if (sectionItem?.title) {
             // Extract section name from pattern "✦ x區 ✦"
             const match = sectionItem.title.match(/✦\s*(.+?)\s*區\s*✦/);
             if (match && match[1]) {

@@ -5,7 +5,6 @@ import type {
   GoogleFormItem,
   Image as FormImage,
 } from "@/types/googleForms";
-import { getThresholds } from "./gifthreshold";
 import { log } from "@/lib/log";
 import { isSection } from "./issection";
 import StepIndicator from "./StepIndicator";
@@ -15,8 +14,12 @@ import Question from "./questions/Question";
 import FormNavButtons from "./buttons/FormNavButtons";
 import Review from "./screens/Review";
 import Success from "./screens/Success";
-import { extractPrice, hasQuestion } from "@/lib/utils";
+import { extractPrice, hasQuestion, isGiftSection } from "@/lib/utils";
 import FormHeader from "./FormHeader";
+import {
+  useGiftSections,
+  calculateMaxGiftSelections,
+} from "./gifts/useGiftSection";
 
 interface DynamicFormProps {
   form: GoogleForm;
@@ -95,38 +98,40 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return map;
   }, [form.items]);
 
-  // Find the first gift section item and question ID (第一階段滿額贈)
-  const firstGiftItem = useMemo(() => {
-    const item = form.items.find(
-      (item) =>
-        item.title?.startsWith("✦第一階段滿額贈") ||
-        item.title?.startsWith("第一階段滿額贈")
-    );
-    if (!item) {
-      log.warn(
-        "First gift item not found. Available titles:",
-        form.items.map((i) => i.title).filter(Boolean)
-      );
-    } else {
-      log.log("First gift item found:", item.title);
-    }
-    return item;
-  }, [form.items]);
+  // Find all gift sections dynamically
+  const giftSections = useGiftSections(form.items);
 
-  // Split form items into steps based on section headers (✦ x區 ✦)
+  // Split form items into steps based on section headers (✦ x區 ✦) and gift sections
   const steps = useMemo(() => {
     const stepArrays: GoogleFormItem[][] = [];
     let currentStepItems: GoogleFormItem[] = [];
 
     form.items.forEach((item) => {
       const isSectionHeader = item.title ? isSection(item.title) : false;
+      const isGift = isGiftSection(item);
 
-      if (isSectionHeader) {
+      // Gift sections are their own steps
+      if (isGift) {
+        // Save current step if it has items
+        if (currentStepItems.length > 0) {
+          const hasQuestions = currentStepItems.some(
+            (i) =>
+              hasQuestion(i) && !isSection(i.title || "") && !isGiftSection(i)
+          );
+          if (hasQuestions) {
+            stepArrays.push([...currentStepItems]);
+          }
+          currentStepItems = [];
+        }
+        // Gift section is its own step
+        stepArrays.push([item]);
+      } else if (isSectionHeader) {
         // If we have accumulated items with questions, save them as a step
         if (currentStepItems.length > 0) {
           // Only add step if it has at least one question item (not just section headers)
           const hasQuestions = currentStepItems.some(
-            (i) => hasQuestion(i) && !isSection(i.title || "")
+            (i) =>
+              hasQuestion(i) && !isSection(i.title || "") && !isGiftSection(i)
           );
           if (hasQuestions) {
             stepArrays.push([...currentStepItems]);
@@ -145,7 +150,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     if (currentStepItems.length > 0) {
       // Only add step if it has at least one question item (not just section headers)
       const hasQuestions = currentStepItems.some(
-        (i) => hasQuestion(i) && !isSection(i.title || "")
+        (i) => hasQuestion(i) && !isSection(i.title || "") && !isGiftSection(i)
       );
       if (hasQuestions) {
         stepArrays.push(currentStepItems);
@@ -171,58 +176,17 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return steps[stepNumber - 1] || [];
   };
 
-  const firstGiftQuestionId = useMemo(() => {
-    return firstGiftItem?.questionItem?.question?.questionId || null;
-  }, [firstGiftItem]);
-
-  // Find the second gift section item and question ID (第二階段滿額贈)
-  const secondGiftItem = useMemo(() => {
-    const item = form.items.find(
-      (item) =>
-        item.title?.includes("✦第二階段滿額贈") ||
-        item.title?.includes("第二階段滿額贈")
-    );
-    if (!item) {
-      log.warn(
-        "Second gift item not found. Available titles:",
-        form.items.map((i) => i.title).filter(Boolean)
-      );
-    } else {
-      log.log("Second gift item found:", item.title);
-    }
-    return item;
-  }, [form.items]);
-
-  const secondGiftQuestionId = useMemo(() => {
-    return secondGiftItem?.questionItem?.question?.questionId || null;
-  }, [secondGiftItem]);
-
-  // Parse gift thresholds from titles
-  const firstGiftThresholds = useMemo(() => {
-    const thresholds = getThresholds(firstGiftItem?.title);
-    if (firstGiftItem?.title && thresholds.length === 0) {
-      log.warn(
-        "Failed to parse first gift thresholds from title:",
-        firstGiftItem.title
-      );
-    } else if (thresholds.length > 0) {
-      log.log("First gift thresholds parsed:", thresholds);
-    }
-    return thresholds;
-  }, [firstGiftItem]);
-
-  const secondGiftThresholds = useMemo(() => {
-    const thresholds = getThresholds(secondGiftItem?.title);
-    if (secondGiftItem?.title && thresholds.length === 0) {
-      log.warn(
-        "Failed to parse second gift thresholds from title:",
-        secondGiftItem.title
-      );
-    } else if (thresholds.length > 0) {
-      log.log("Second gift thresholds parsed:", thresholds);
-    }
-    return thresholds;
-  }, [secondGiftItem]);
+  // Create a simplified map of gift sections for Question component
+  const giftSectionsMap = useMemo(() => {
+    const map = new Map<
+      string,
+      { thresholds: Array<{ amount: number; gifts: number }> }
+    >();
+    giftSections.forEach((data, questionId) => {
+      map.set(questionId, { thresholds: data.thresholds });
+    });
+    return map;
+  }, [giftSections]);
 
   // Create a set of text question IDs to exclude from count
   const textQuestionIds = useMemo(() => {
@@ -303,12 +267,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
       const questionId = questionIdMatch[1];
 
-      // Skip both gift sections in this calculation
-      if (
-        questionId === firstGiftQuestionId ||
-        questionId === secondGiftQuestionId
-      )
-        return;
+      // Skip all gift sections in this calculation
+      if (giftSections.has(questionId)) return;
 
       const questionPrice = questionPriceMap.get(questionId);
 
@@ -349,69 +309,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     });
 
     return sum;
-  }, [
-    formValues,
-    questionPriceMap,
-    optionPriceMap,
-    firstGiftQuestionId,
-    secondGiftQuestionId,
-  ]);
-
-  // Determine max allowed selections for first gift section based on total and parsed thresholds
-  const maxFirstGiftSelections = useMemo(() => {
-    if (firstGiftThresholds.length === 0) {
-      log.warn("No first gift thresholds found, returning 0");
-      return 0;
-    }
-
-    log.log("Calculating first gift selections:", {
-      totalExcludingGift,
-      thresholds: firstGiftThresholds,
-    });
-
-    // Find the highest threshold that the total meets or exceeds
-    for (let i = firstGiftThresholds.length - 1; i >= 0; i--) {
-      if (totalExcludingGift >= firstGiftThresholds[i].amount) {
-        log.log(
-          `Total ${totalExcludingGift} >= ${firstGiftThresholds[i].amount}, returning ${firstGiftThresholds[i].gifts}`
-        );
-        return firstGiftThresholds[i].gifts;
-      }
-    }
-
-    log.log(
-      `Total ${totalExcludingGift} doesn't meet any threshold, returning 0`
-    );
-    return 0;
-  }, [totalExcludingGift, firstGiftThresholds]);
-
-  // Determine max allowed selections for second gift section based on total and parsed thresholds
-  const maxSecondGiftSelections = useMemo(() => {
-    if (secondGiftThresholds.length === 0) {
-      log.warn("No second gift thresholds found, returning 0");
-      return 0;
-    }
-
-    log.log("Calculating second gift selections:", {
-      totalExcludingGift,
-      thresholds: secondGiftThresholds,
-    });
-
-    // Find the highest threshold that the total meets or exceeds
-    for (let i = secondGiftThresholds.length - 1; i >= 0; i--) {
-      if (totalExcludingGift >= secondGiftThresholds[i].amount) {
-        log.log(
-          `Total ${totalExcludingGift} >= ${secondGiftThresholds[i].amount}, returning ${secondGiftThresholds[i].gifts}`
-        );
-        return secondGiftThresholds[i].gifts;
-      }
-    }
-
-    log.log(
-      `Total ${totalExcludingGift} doesn't meet any threshold, returning 0`
-    );
-    return 0;
-  }, [totalExcludingGift, secondGiftThresholds]);
+  }, [formValues, questionPriceMap, optionPriceMap, giftSections]);
 
   // Calculate total including everything (for display)
   const total = useMemo(() => {
@@ -423,57 +321,31 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return sum;
   }, [totalExcludingGift]);
 
-  // Enforce first gift selection limit
+  // Enforce gift selection limits for all gift sections
   useEffect(() => {
-    if (!firstGiftQuestionId) return;
+    giftSections.forEach((giftData, questionId) => {
+      const maxSelections = calculateMaxGiftSelections(
+        totalExcludingGift,
+        giftData.thresholds
+      );
+      const giftFieldName = `question_${questionId}`;
+      const currentSelections = formValues[giftFieldName] as
+        | string[]
+        | undefined;
 
-    const giftFieldName = `question_${firstGiftQuestionId}`;
-    const currentSelections = formValues[giftFieldName] as string[] | undefined;
-
-    if (
-      Array.isArray(currentSelections) &&
-      currentSelections.length > maxFirstGiftSelections
-    ) {
-      // Trim selections to max allowed (keep the first N selections)
-      const trimmed = currentSelections.slice(0, maxFirstGiftSelections);
-      setValue(giftFieldName, trimmed, {
-        shouldValidate: false,
-        shouldDirty: false,
-      });
-    }
-  }, [
-    maxFirstGiftSelections,
-    firstGiftQuestionId,
-    setValue,
-    formValues,
-    totalExcludingGift,
-  ]);
-
-  // Enforce second gift selection limit
-  useEffect(() => {
-    if (!secondGiftQuestionId) return;
-
-    const giftFieldName = `question_${secondGiftQuestionId}`;
-    const currentSelections = formValues[giftFieldName] as string[] | undefined;
-
-    if (
-      Array.isArray(currentSelections) &&
-      currentSelections.length > maxSecondGiftSelections
-    ) {
-      // Trim selections to max allowed (keep the first N selections)
-      const trimmed = currentSelections.slice(0, maxSecondGiftSelections);
-      setValue(giftFieldName, trimmed, {
-        shouldValidate: false,
-        shouldDirty: false,
-      });
-    }
-  }, [
-    maxSecondGiftSelections,
-    secondGiftQuestionId,
-    setValue,
-    formValues,
-    totalExcludingGift,
-  ]);
+      if (
+        Array.isArray(currentSelections) &&
+        currentSelections.length > maxSelections
+      ) {
+        // Trim selections to max allowed (keep the first N selections)
+        const trimmed = currentSelections.slice(0, maxSelections);
+        setValue(giftFieldName, trimmed, {
+          shouldValidate: false,
+          shouldDirty: false,
+        });
+      }
+    });
+  }, [giftSections, totalExcludingGift, setValue, formValues]);
 
   // Scroll to top when review screen is shown
   useEffect(() => {
@@ -541,11 +413,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       const questionId = questionIdMatch[1];
 
       // Skip text questions and gift sections
-      if (
-        textQuestionIds.has(questionId) ||
-        questionId === firstGiftQuestionId ||
-        questionId === secondGiftQuestionId
-      ) {
+      if (textQuestionIds.has(questionId) || giftSections.has(questionId)) {
         return;
       }
 
@@ -602,8 +470,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   }, [
     reviewData,
     textQuestionIds,
-    firstGiftQuestionId,
-    secondGiftQuestionId,
+    giftSections,
     optionPriceMap,
     questionPriceMap,
     optionImageMap,
@@ -718,13 +585,8 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
                 errors={errors}
                 watch={watch}
                 formValues={formValues}
-                firstGiftQuestionId={firstGiftQuestionId}
-                secondGiftQuestionId={secondGiftQuestionId}
-                firstGiftThresholds={firstGiftThresholds}
-                secondGiftThresholds={secondGiftThresholds}
+                giftSections={giftSectionsMap}
                 totalExcludingGift={totalExcludingGift}
-                maxFirstGiftSelections={maxFirstGiftSelections}
-                maxSecondGiftSelections={maxSecondGiftSelections}
               />
             ))}
           </div>

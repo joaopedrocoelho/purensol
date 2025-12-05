@@ -1,6 +1,7 @@
 import React from "react";
 import { UseFormRegister, FieldErrors } from "react-hook-form";
 import type { GoogleFormItem, Question } from "@/types/googleForms";
+import { stripGiftSectionPrefix } from "@/lib/utils";
 
 interface DateQuestionProps {
   item: GoogleFormItem;
@@ -26,7 +27,7 @@ export default function DateQuestion({
   return (
     <div key={item.itemId} className="mb-10">
       <label className="block text-lg font-black text-gray-700 mb-2">
-        {item.title}
+        {stripGiftSectionPrefix(item.title)}
         {isRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
       {item.description && (

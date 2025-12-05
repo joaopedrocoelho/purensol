@@ -1,6 +1,7 @@
 import React from "react";
 import { UseFormRegister, FieldErrors } from "react-hook-form";
 import type { GoogleFormItem } from "@/types/googleForms";
+import { stripGiftSectionPrefix } from "@/lib/utils";
 
 interface QuestionGroupProps {
   item: GoogleFormItem;
@@ -23,7 +24,7 @@ export default function QuestionGroup({
     <div key={item.itemId} className="mb-10">
       {item.title && (
         <h3 className="text-lg font-semibold text-gray-900 mb-4">
-          {item.title}
+          {stripGiftSectionPrefix(item.title)}
         </h3>
       )}
       {item.description && (

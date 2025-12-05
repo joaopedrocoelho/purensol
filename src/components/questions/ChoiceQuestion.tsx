@@ -3,6 +3,8 @@ import { UseFormRegister, FieldErrors } from "react-hook-form";
 import type { GoogleFormItem, Question } from "@/types/googleForms";
 import Photo from "../Photo";
 import { transformImageUrl } from "@/lib/transformImageUrl";
+import GiftSectionInfo from "../gifts/GiftSectionInfo";
+import { stripGiftSectionPrefix } from "@/lib/utils";
 
 interface ChoiceQuestionProps {
   item: GoogleFormItem;
@@ -13,10 +15,7 @@ interface ChoiceQuestionProps {
   errors: FieldErrors<Record<string, string | string[] | number>>;
   // Gift section props (optional)
   isGiftSection?: boolean;
-  isFirstGiftSection?: boolean;
-  isSecondGiftSection?: boolean;
-  firstGiftThresholds?: Array<{ amount: number; gifts: number }>;
-  secondGiftThresholds?: Array<{ amount: number; gifts: number }>;
+  giftThresholds?: Array<{ amount: number; gifts: number }>;
   totalExcludingGift?: number;
   maxGiftSelections?: number;
   currentGiftCount?: number;
@@ -32,10 +31,7 @@ export default function ChoiceQuestion({
   register,
   errors,
   isGiftSection = false,
-  isFirstGiftSection = false,
-  isSecondGiftSection = false,
-  firstGiftThresholds = [],
-  secondGiftThresholds = [],
+  giftThresholds = [],
   totalExcludingGift = 0,
   maxGiftSelections = 0,
   currentGiftCount = 0,
@@ -52,7 +48,7 @@ export default function ChoiceQuestion({
   return (
     <div key={item.itemId} className="mb-10">
       <label className="block text-lg font-black text-gray-700 mb-2">
-        {item.title}
+        {stripGiftSectionPrefix(item.title)}
         {isRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
       {item.description && (
@@ -61,44 +57,20 @@ export default function ChoiceQuestion({
 
       {/* Gift section limit message */}
       {isGiftSection && (
-        <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-          <p className="text-sm text-yellow-800">
-            {isFirstGiftSection
-              ? (() => {
-                  const thresholds = firstGiftThresholds;
-                  if (thresholds.length === 0) {
-                    return "無法解析贈品規則";
-                  }
-                  const firstThreshold = thresholds[0];
-                  if (totalExcludingGift < firstThreshold.amount) {
-                    return `消費滿 $${firstThreshold.amount.toLocaleString()} 可選 ${
-                      firstThreshold.gifts
-                    } 項`;
-                  }
-                  return `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`;
-                })()
-              : isSecondGiftSection
-              ? (() => {
-                  const thresholds = secondGiftThresholds;
-                  if (thresholds.length === 0) {
-                    return "無法解析贈品規則";
-                  }
-                  const firstThreshold = thresholds[0];
-                  if (totalExcludingGift < firstThreshold.amount) {
-                    return `消費滿 $${firstThreshold.amount.toLocaleString()} 可選 ${
-                      firstThreshold.gifts
-                    } 項`;
-                  }
-                  return `目前可選 ${maxGiftSelections} 項 (已選 ${currentGiftCount}/${maxGiftSelections})`;
-                })()
-              : null}
-          </p>
-        </div>
+        <GiftSectionInfo
+          thresholds={giftThresholds}
+          totalExcludingGift={totalExcludingGift}
+          maxGiftSelections={maxGiftSelections}
+          currentGiftCount={currentGiftCount}
+        />
       )}
 
       {/* Question item image */}
       {item.questionItem?.image && (
-        <Photo image={item.questionItem.image} alt={item.title} />
+        <Photo
+          image={item.questionItem.image}
+          alt={stripGiftSectionPrefix(item.title)}
+        />
       )}
 
       {type === "DROP_DOWN" ? (

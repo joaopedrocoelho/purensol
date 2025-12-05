@@ -3,6 +3,7 @@ import { UseFormRegister, FieldErrors } from "react-hook-form";
 import type { GoogleFormItem } from "@/types/googleForms";
 import Photo from "../Photo";
 import { log } from "@/lib/log";
+import { stripGiftSectionPrefix } from "@/lib/utils";
 
 interface GridQuestionProps {
   item: GoogleFormItem;
@@ -43,7 +44,7 @@ export default function GridQuestion({
   return (
     <div key={item.itemId} className="mb-10">
       <label className="block text-lg font-black text-gray-700 mb-2">
-        {item.title}
+        {stripGiftSectionPrefix(item.title)}
         {gridIsRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
       {item.description && (
@@ -52,7 +53,10 @@ export default function GridQuestion({
 
       {/* Question group image */}
       {item.questionGroupItem?.image && (
-        <Photo image={item.questionGroupItem.image} alt={item.title} />
+        <Photo
+          image={item.questionGroupItem.image}
+          alt={stripGiftSectionPrefix(item.title)}
+        />
       )}
 
       {effectiveRows.length > 0 ? (

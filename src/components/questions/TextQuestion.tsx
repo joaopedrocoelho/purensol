@@ -2,6 +2,7 @@ import React from "react";
 import { UseFormRegister, FieldErrors } from "react-hook-form";
 import type { GoogleFormItem, Question } from "@/types/googleForms";
 import Photo from "../Photo";
+import { stripGiftSectionPrefix } from "@/lib/utils";
 
 interface TextQuestionProps {
   item: GoogleFormItem;
@@ -29,7 +30,7 @@ export default function TextQuestion({
   return (
     <div key={item.itemId} className="mb-10">
       <label className="block text-lg font-black text-gray-700 mb-2">
-        {item.title}
+        {stripGiftSectionPrefix(item.title)}
         {isRequired && <span className="text-red-500 ml-1">*</span>}
       </label>
       {item.description && (
@@ -38,7 +39,10 @@ export default function TextQuestion({
 
       {/* Question item image */}
       {item.questionItem?.image && (
-        <Photo image={item.questionItem.image} alt={item.title} />
+        <Photo
+          image={item.questionItem.image}
+          alt={stripGiftSectionPrefix(item.title)}
+        />
       )}
 
       {isParagraph ? (

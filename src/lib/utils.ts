@@ -23,3 +23,24 @@ export function hasQuestion(item: GoogleFormItem): boolean {
     item.pageBreakItem
   );
 }
+
+/**
+ * Check if an item is a gift section
+ * @param item - The Google Form item to check
+ * @returns True if the item title starts with "~gift_section~"
+ */
+export function isGiftSection(item: GoogleFormItem): boolean {
+  return item.title?.startsWith("~gift_section~") || false;
+}
+
+/**
+ * Strip the "~gift_section~" prefix from a title for display
+ * @param title - The title string that may contain the prefix
+ * @returns The title without the "~gift_section~" prefix
+ */
+export function stripGiftSectionPrefix(title: string | undefined): string {
+  if (!title) return "";
+  return title.startsWith("~gift_section~")
+    ? title.substring("~gift_section~".length).trim()
+    : title;
+}
