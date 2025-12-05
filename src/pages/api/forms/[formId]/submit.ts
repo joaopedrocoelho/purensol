@@ -7,6 +7,11 @@ import {
 import { extractFormId } from "@/lib/googleForms";
 import type { GoogleForm } from "@/types/googleForms";
 import { log } from "@/lib/log";
+import { sendEmail } from "@/lib/googleAuth";
+import {
+  generateOrderConfirmationEmail,
+  generateAdminNotificationEmail,
+} from "@/lib/emailTemplate";
 
 interface SubmitResponse {
   success: boolean;
@@ -40,19 +45,18 @@ function transformFormDataToSheetRow(
   total: number,
   email?: string
 ): (string | number)[] {
-  // Find first gift question ID (第一階段滿額贈)
-  const firstGiftQuestionId = form.items.find(
-    (item) =>
-      item.title?.includes("✦第一階段滿額贈") ||
-      item.title?.includes("第一階段滿額贈")
-  )?.questionItem?.question?.questionId;
-
-  // Find second gift question ID (第二階段滿額贈)
-  const secondGiftQuestionId = form.items.find(
-    (item) =>
-      item.title?.includes("✦第二階段滿額贈") ||
-      item.title?.includes("第二階段滿額贈")
-  )?.questionItem?.question?.questionId;
+  // Find all gift question IDs (dynamic gift sections)
+  const giftQuestionIds = new Set<string>();
+  form.items.forEach((item) => {
+    if (item.title?.startsWith("~gift_section~")) {
+      const questionId =
+        item.questionItem?.question?.questionId ||
+        item.questionGroupItem?.questions?.[0]?.questionId;
+      if (questionId) {
+        giftQuestionIds.add(questionId);
+      }
+    }
+  });
 
   // Find total column and gift columns
   const totalColumnHeader = headers.find(
@@ -127,26 +131,34 @@ function transformFormDataToSheetRow(
       return;
     }
 
-    // Check if it's a gift section
-    if (questionId === firstGiftQuestionId) {
+    // Check if it's a gift section (any gift section)
+    if (giftQuestionIds.has(questionId)) {
+      // Determine which gift column to use based on item title
+      const isFirstGift =
+        item.title?.includes("第一階段") || item.title?.includes("第一");
+      const isSecondGift =
+        item.title?.includes("第二階段") || item.title?.includes("第二");
+
       if (Array.isArray(value)) {
         const giftValues = value
           .map((v) => String(v))
           .filter((v) => v && v !== "false" && v.trim() !== "");
-        firstGifts.push(...giftValues);
+        if (isFirstGift) {
+          firstGifts.push(...giftValues);
+        } else if (isSecondGift) {
+          secondGifts.push(...giftValues);
+        } else {
+          // If we can't determine, add to first gifts
+          firstGifts.push(...giftValues);
+        }
       } else if (String(value) !== "false") {
-        firstGifts.push(String(value));
-      }
-      return;
-    }
-    if (questionId === secondGiftQuestionId) {
-      if (Array.isArray(value)) {
-        const giftValues = value
-          .map((v) => String(v))
-          .filter((v) => v && v !== "false" && v.trim() !== "");
-        secondGifts.push(...giftValues);
-      } else if (String(value) !== "false") {
-        secondGifts.push(String(value));
+        if (isFirstGift) {
+          firstGifts.push(String(value));
+        } else if (isSecondGift) {
+          secondGifts.push(String(value));
+        } else {
+          firstGifts.push(String(value));
+        }
       }
       return;
     }
@@ -355,6 +367,163 @@ export default async function handler(
 
     // Append to sheet
     await appendToGoogleSheet(spreadsheetId, row);
+
+    // Send confirmation email if email is provided
+    const userEmail =
+      email || (row[headers.indexOf("電子郵件地址")] as string) || "";
+    if (userEmail && typeof userEmail === "string" && userEmail.includes("@")) {
+      try {
+        // Extract products and gifts from form data
+        const products: Array<{ name: string; price: number }> = [];
+        const gifts: Array<{ name: string; price: number }> = [];
+
+        // Find all gift question IDs (dynamic gift sections)
+        const giftQuestionIds = new Set<string>();
+        form.items.forEach((item) => {
+          if (item.title?.startsWith("~gift_section~")) {
+            const questionId =
+              item.questionItem?.question?.questionId ||
+              item.questionGroupItem?.questions?.[0]?.questionId;
+            if (questionId) {
+              giftQuestionIds.add(questionId);
+            }
+          }
+        });
+
+        // Extract price from title
+        const extractPrice = (title: string | undefined): number | null => {
+          if (!title) return null;
+          const match = title.match(/\$(\d+)/);
+          return match ? parseInt(match[1], 10) : null;
+        };
+
+        // Process form data to extract products and gifts
+        Object.entries(formDataToProcess).forEach(([fieldName, value]) => {
+          const questionIdMatch = fieldName.match(
+            /^question_(.+?)(?:_row_\d+_col_\d+)?$/
+          );
+          if (!questionIdMatch) return;
+
+          const questionId = questionIdMatch[1];
+          const item = form.items.find(
+            (i) =>
+              i.questionItem?.question?.questionId === questionId ||
+              i.questionGroupItem?.questions?.some(
+                (q) => q.questionId === questionId
+              )
+          );
+
+          if (!item) return;
+
+          // Check if it's a gift (any gift section)
+          if (giftQuestionIds.has(questionId)) {
+            if (Array.isArray(value)) {
+              value.forEach((val) => {
+                if (val && String(val).trim() && String(val) !== "false") {
+                  gifts.push({ name: String(val), price: 0 });
+                }
+              });
+            } else if (value && String(value) !== "false") {
+              gifts.push({ name: String(value), price: 0 });
+            }
+            return;
+          }
+
+          // Skip text questions
+          if (item.questionItem?.question?.textQuestion) {
+            return;
+          }
+
+          // Extract product with price
+          const itemPrice = extractPrice(item.title);
+          if (Array.isArray(value)) {
+            value.forEach((val) => {
+              if (val && String(val).trim() && String(val) !== "false") {
+                const optionPrice = extractPrice(String(val));
+                products.push({
+                  name: String(val),
+                  price: optionPrice || itemPrice || 0,
+                });
+              }
+            });
+          } else if (value && String(value) !== "false") {
+            const optionPrice = extractPrice(String(value));
+            products.push({
+              name: String(value),
+              price: optionPrice || itemPrice || 0,
+            });
+          }
+        });
+
+        // Get full name
+        const fullName =
+          (row[
+            headers.findIndex((h) => h.includes("全名") || h.match(/^1\./))
+          ] as string) || "";
+
+        // Generate timestamp
+        const timestamp = new Date().toLocaleString("zh-TW", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+          hour12: true,
+        });
+
+        // Send emails using Resend API
+        try {
+          // Send confirmation email to user
+          await sendEmail(
+            userEmail,
+            "訂單確認 - Pure n Sol",
+            generateOrderConfirmationEmail({
+              fullName,
+              email: userEmail,
+              products,
+              gifts,
+              total: totalAmount,
+              timestamp,
+            })
+          );
+          log.log("Confirmation email sent to:", userEmail);
+        } catch (userEmailError) {
+          log.error(
+            "Error sending confirmation email to user:",
+            userEmailError
+          );
+          if (userEmailError instanceof Error) {
+            log.error("Error message:", userEmailError.message);
+          }
+        }
+
+        // Send notification email to admin
+        try {
+          await sendEmail(
+            "purensol.pr@gmail.com",
+            `新訂單 - ${fullName || "客戶"} - $${totalAmount.toLocaleString()}`,
+            generateAdminNotificationEmail({
+              fullName,
+              email: userEmail,
+              products,
+              gifts,
+              total: totalAmount,
+              timestamp,
+            })
+          );
+          log.log("Admin notification email sent to purensol.pr@gmail.com");
+        } catch (adminEmailError) {
+          log.error("Error sending admin notification email:", adminEmailError);
+          if (adminEmailError instanceof Error) {
+            log.error("Error message:", adminEmailError.message);
+          }
+        }
+      } catch (emailError) {
+        // Log email error but don't fail the request
+        log.error("Error sending confirmation email:", emailError);
+      }
+    }
 
     return res.status(200).json({
       success: true,

@@ -1,6 +1,7 @@
 import { google, type Auth } from "googleapis";
 import type { GoogleForm } from "@/types/googleForms";
 import { log } from "./log";
+import { Resend } from "resend";
 
 /**
  * Gets an authenticated Google Forms API client using a service account
@@ -205,5 +206,54 @@ export async function appendToGoogleSheet(
     throw new Error(
       `Failed to write to spreadsheet: ${err.message || "Unknown error"}`
     );
+  }
+}
+
+/**
+ * Sends an email using Resend API
+ * @param to - Recipient email address
+ * @param subject - Email subject
+ * @param htmlBody - HTML email body
+ */
+export async function sendEmail(
+  to: string,
+  subject: string,
+  htmlBody: string
+): Promise<void> {
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    throw new Error(
+      "RESEND_API_KEY environment variable is not set. Please configure Resend API key."
+    );
+  }
+
+  const resend = new Resend(resendApiKey);
+  const senderEmail = "crystal@purensol.com.tw";
+
+  try {
+    log.log(`Attempting to send email to ${to} from ${senderEmail}`);
+
+    const result = await resend.emails.send({
+      from: senderEmail,
+      to: to,
+      subject: subject,
+      html: htmlBody,
+    });
+
+    // Check for Resend API errors in the response
+    if (result.error) {
+      log.error("Resend API error:", result.error);
+      throw new Error(
+        `Resend API error: ${
+          result.error.message || JSON.stringify(result.error)
+        }`
+      );
+    }
+
+    log.log(`Email sent successfully to ${to} from ${senderEmail}`, result);
+  } catch (error) {
+    const err = error as { message?: string };
+    log.error("Error sending email:", error);
+    throw new Error(`Failed to send email: ${err.message || "Unknown error"}`);
   }
 }

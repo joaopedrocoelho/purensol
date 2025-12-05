@@ -109,18 +109,18 @@ export default function Home({ form, error }: HomeProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 pb-24 px-4 sm:px-6 lg:px-8">
       <Head>
         <title>Pure n Sol</title>
       </Head>
       <div className="max-w-4xl mx-auto">
-        <div className="mb-8 flex justify-center">
+        <div className=" flex justify-center">
           <Image
             src="/purensol.png"
             alt="Pure n Sol"
             width={300}
             height={150}
-            className="object-contain"
+            className="object-contain w-[200px]"
             priority
           />
         </div>

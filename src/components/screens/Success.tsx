@@ -18,7 +18,7 @@ export default function Success({
   selectedGifts = [],
 }: SuccessProps) {
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="max-w-2xl mx-auto">
       <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
         <h2 className="text-xl font-semibold text-green-800 mb-2">
           表單提交成功！
