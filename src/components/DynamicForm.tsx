@@ -393,7 +393,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     setSelectedItemsCount(count);
   }, [total, formValues, textQuestionIds, setTotal, setSelectedItemsCount]);
 
-  // Extract selected products from review data
+  // Extract selected products from review data (excluding gifts)
   const getSelectedProducts = useMemo(() => {
     if (!reviewData) return [];
 
@@ -477,6 +477,60 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     questionItemImageMap,
   ]);
 
+  // Extract selected gifts from review data
+  const getSelectedGifts = useMemo(() => {
+    if (!reviewData) return [];
+
+    const gifts: Array<{
+      name: string;
+      price: number;
+      image?: FormImage;
+    }> = [];
+
+    Object.entries(reviewData).forEach(([fieldName, value]) => {
+      // Extract question ID from field name
+      const questionIdMatch = fieldName.match(
+        /^question_(.+?)(?:_row_\d+_col_\d+)?$/
+      );
+      if (!questionIdMatch) return;
+
+      const questionId = questionIdMatch[1];
+
+      // Only process gift sections
+      if (!giftSections.has(questionId)) {
+        return;
+      }
+
+      // Handle array values (checkboxes)
+      if (Array.isArray(value)) {
+        value.forEach((optionValue) => {
+          if (typeof optionValue === "string" && optionValue.trim() !== "") {
+            const optionImage = optionImageMap.get(optionValue);
+            const itemImage = questionItemImageMap.get(questionId);
+            gifts.push({
+              name: optionValue,
+              price: 0, // Gifts are free
+              image: optionImage || itemImage,
+            });
+          }
+        });
+      } else if (value) {
+        // Handle single selection (radio or single checkbox)
+        if (typeof value === "string" && value.trim() !== "") {
+          const optionImage = optionImageMap.get(value);
+          const itemImage = questionItemImageMap.get(questionId);
+          gifts.push({
+            name: value,
+            price: 0, // Gifts are free
+            image: optionImage || itemImage,
+          });
+        }
+      }
+    });
+
+    return gifts;
+  }, [reviewData, giftSections, optionImageMap, questionItemImageMap]);
+
   const onFormNext = async (data: FormValues) => {
     // Validate only current step's fields
     const itemsToValidate = getStepItems(currentStep);
@@ -544,6 +598,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     return (
       <Review
         selectedProducts={getSelectedProducts}
+        selectedGifts={getSelectedGifts}
         onReviewSubmit={onReviewSubmit}
         onReviewCancel={onReviewCancel}
         isSubmitting={isSubmitting}
@@ -553,7 +608,12 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
 
   // Success screen - shows after submission
   if (submitted) {
-    return <Success selectedProducts={getSelectedProducts} />;
+    return (
+      <Success
+        selectedProducts={getSelectedProducts}
+        selectedGifts={getSelectedGifts}
+      />
+    );
   }
 
   // Get items for current step

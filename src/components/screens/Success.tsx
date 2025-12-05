@@ -10,9 +10,13 @@ interface Product {
 
 interface SuccessProps {
   selectedProducts: Product[];
+  selectedGifts?: Product[];
 }
 
-export default function Success({ selectedProducts }: SuccessProps) {
+export default function Success({
+  selectedProducts,
+  selectedGifts = [],
+}: SuccessProps) {
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
@@ -22,7 +26,11 @@ export default function Success({ selectedProducts }: SuccessProps) {
         <p className="text-green-700">感謝您的提交。</p>
       </div>
 
-      <SelectedProducts products={selectedProducts} onReviewCancel={() => {}} />
+      <SelectedProducts
+        products={selectedProducts}
+        gifts={selectedGifts}
+        onReviewCancel={() => {}}
+      />
     </div>
   );
 }

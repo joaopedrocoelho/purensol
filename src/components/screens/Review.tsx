@@ -10,6 +10,7 @@ interface Product {
 
 interface ReviewProps {
   selectedProducts: Product[];
+  selectedGifts?: Product[];
   onReviewSubmit: () => void;
   onReviewCancel: () => void;
   isSubmitting?: boolean;
@@ -17,6 +18,7 @@ interface ReviewProps {
 
 export default function Review({
   selectedProducts,
+  selectedGifts = [],
   onReviewSubmit,
   onReviewCancel,
   isSubmitting = false,
@@ -28,10 +30,11 @@ export default function Review({
 
         <SelectedProducts
           products={selectedProducts}
+          gifts={selectedGifts}
           onReviewCancel={onReviewCancel}
         />
 
-        {selectedProducts.length > 0 && (
+        {(selectedProducts.length > 0 || selectedGifts.length > 0) && (
           <div className="flex space-x-4 mt-6">
             <button
               type="button"
