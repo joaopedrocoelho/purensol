@@ -625,7 +625,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
         onSubmit={handleSubmit(onFormNext)}
         className={`max-w-2xl mx-auto ${total > 0 ? "pb-24" : ""}`}
       >
-        <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200">
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
           <FormHeader form={form} currentStep={currentStep} />
 
           {/* Step indicator */}

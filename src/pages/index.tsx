@@ -139,7 +139,7 @@ export default function Home({ form, error }: HomeProps) {
         {form && !error && <DynamicForm form={form} onSubmit={handleSubmit} />}
 
         {!form && !error && (
-          <div className="bg-white p-8 rounded-lg shadow-sm border border-gray-200 text-center">
+          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 text-center">
             <p className="text-gray-600">
               沒有可用的表單資料。請檢查您的設定。
             </p>

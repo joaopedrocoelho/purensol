@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import type { GoogleFormItem } from "@/types/googleForms";
 import { isSection } from "./issection";
 import { isGiftSection, stripGiftSectionPrefix } from "@/lib/utils";
@@ -16,13 +16,30 @@ export default function StepIndicator({
   totalFormSteps,
   showReview,
 }: StepIndicatorProps) {
+  const activeStepRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Scroll active step into view when it changes
+  useEffect(() => {
+    if (activeStepRef.current && containerRef.current) {
+      activeStepRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    }
+  }, [currentStep, showReview]);
+
   if (totalFormSteps <= 1) {
     return null;
   }
 
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-center space-x-2 overflow-x-auto pb-2">
+      <div
+        ref={containerRef}
+        className="flex items-center space-x-2 overflow-x-auto pb-2 scroll-smooth [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      >
         {steps.map((stepItems, index) => {
           const stepNumber = index + 1;
           const isActive = currentStep === stepNumber;
@@ -56,7 +73,10 @@ export default function StepIndicator({
 
           return (
             <React.Fragment key={stepNumber}>
-              <div className="flex items-center shrink-0">
+              <div
+                ref={isActive ? activeStepRef : null}
+                className="flex items-center shrink-0"
+              >
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
                     isActive || isCompleted
@@ -78,7 +98,10 @@ export default function StepIndicator({
         })}
         {/* Review step */}
         <div className="w-8 h-0.5 bg-gray-300 shrink-0"></div>
-        <div className="flex items-center shrink-0">
+        <div
+          ref={showReview ? activeStepRef : null}
+          className="flex items-center shrink-0"
+        >
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold ${
               showReview
