@@ -9,6 +9,8 @@ import { getThresholds } from "./gifthreshold";
 import { log } from "@/lib/log";
 import { isSection } from "./issection";
 import StepIndicator from "./StepIndicator";
+import { useCart } from "./CartContext";
+import TotalPriceToaster from "./TotalPriceToaster";
 
 interface DynamicFormProps {
   form: GoogleForm;
@@ -32,6 +34,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   const [showReview, setShowReview] = useState(false);
   const [reviewData, setReviewData] = useState<FormValues | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const { setTotal, setSelectedItemsCount } = useCart();
 
   // Watch all form values to calculate total
   const formValues = watch();
@@ -498,6 +501,35 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }, 100);
   }, [currentStep]);
+
+  // Update cart context when total or formValues change
+  useEffect(() => {
+    setTotal(total);
+
+    // Calculate selected items count
+    const count = Object.entries(formValues).reduce(
+      (count: number, [fieldName, value]) => {
+        // Extract question ID from field name (format: "question_<questionId>")
+        const questionIdMatch = fieldName.match(
+          /^question_(.+?)(?:_row_\d+_col_\d+)?$/
+        );
+        if (questionIdMatch) {
+          const questionId = questionIdMatch[1];
+          // Skip text questions
+          if (textQuestionIds.has(questionId)) {
+            return count;
+          }
+        }
+        // Count non-text fields
+        if (Array.isArray(value)) {
+          return count + value.length;
+        }
+        return count + (value ? 1 : 0);
+      },
+      0
+    );
+    setSelectedItemsCount(count);
+  }, [total, formValues, textQuestionIds, setTotal, setSelectedItemsCount]);
 
   // Helper function to transform Google Forms image URLs to use our proxy API
   const transformImageUrl = (contentUri: string, width: number): string => {
@@ -1526,46 +1558,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       </form>
 
       {/* Total Price Toaster */}
-      {
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-600">總計</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  ${total.toLocaleString()}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-gray-500">
-                  {Object.entries(formValues).reduce(
-                    (count: number, [fieldName, value]) => {
-                      // Extract question ID from field name (format: "question_<questionId>")
-                      const questionIdMatch = fieldName.match(
-                        /^question_(.+?)(?:_row_\d+_col_\d+)?$/
-                      );
-                      if (questionIdMatch) {
-                        const questionId = questionIdMatch[1];
-                        // Skip text questions
-                        if (textQuestionIds.has(questionId)) {
-                          return count;
-                        }
-                      }
-                      // Count non-text fields
-                      if (Array.isArray(value)) {
-                        return count + value.length;
-                      }
-                      return count + (value ? 1 : 0);
-                    },
-                    0
-                  )}{" "}
-                  個已選擇的項目
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      }
+      <TotalPriceToaster />
     </>
   );
 }
