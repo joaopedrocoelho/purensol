@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "googleapis": "^166.0.0",
-    "next": "16.0.6",
+    "next": "^16.0.7",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hook-form": "^7.67.0",
@@ -27,7 +27,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9",
-    "eslint-config-next": "16.0.6",
+    "eslint-config-next": "^16.0.7",
     "jsdom": "^27.2.0",
     "tailwindcss": "^4",
     "typescript": "^5",
