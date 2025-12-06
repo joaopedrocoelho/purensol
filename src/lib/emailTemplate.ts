@@ -89,14 +89,14 @@ export function generateOrderConfirmationEmail(data: EmailData): string {
           <tr>
             <td style="padding: 24px;">
               <div style="background-color: #dcfce7; border: 1px solid #86efac; border-radius: 8px; padding: 24px; margin-bottom: 24px;">
-                <h2 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #166534;">表單提交成功！</h2>
-                <p style="margin: 0; color: #15803d; font-size: 14px;">感謝您的提交。</p>
+                <h2 style="margin: 0 0 8px; font-size: 20px; font-weight: 600; color: #166534;">表單提交成功囉！</h2>
+                <p style="margin: 0; color: #15803d; font-size: 14px;"> 請私訊官方Line(@purensoltw)，小幫手會盡快協助確認訂單內容♥︎</p>
               </div>
               
               <!-- Friendly pre-order message -->
               <p style="margin: 0 0 24px; color: #374151; font-size: 16px; line-height: 1.6;">
                 嗨${fullName ? ` ${fullName}` : ""}！ 👋<br><br>
-                這是您預訂的內容，請確認一下：
+                這是您預購的內容，請協助確認～有任何問題請勿回覆此email，可以直接訊息官方Line：@purensoltw，謝謝您
               </p>
               
               <!-- Products Section -->
