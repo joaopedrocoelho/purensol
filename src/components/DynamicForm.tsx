@@ -37,12 +37,13 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
     watch,
     setValue,
     trigger,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<FormValues>();
   const [submitted, setSubmitted] = useState(false);
   const [showReview, setShowReview] = useState(false);
   const [reviewData, setReviewData] = useState<FormValues | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const { setTotal, setSelectedItemsCount } = useCart();
 
   // Watch all form values to calculate total
@@ -573,8 +574,9 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
   };
 
   const onReviewSubmit = async () => {
-    if (!reviewData) return;
+    if (!reviewData || isSubmittingForm) return;
 
+    setIsSubmittingForm(true);
     try {
       if (onSubmit) {
         await onSubmit(reviewData);
@@ -584,6 +586,9 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
       setSubmitted(true);
     } catch (error) {
       log.error("Error submitting form:", error);
+      // Don't set submitted to true on error, allow retry
+    } finally {
+      setIsSubmittingForm(false);
     }
   };
 
@@ -601,7 +606,7 @@ export default function DynamicForm({ form, onSubmit }: DynamicFormProps) {
         selectedGifts={getSelectedGifts}
         onReviewSubmit={onReviewSubmit}
         onReviewCancel={onReviewCancel}
-        isSubmitting={isSubmitting}
+        isSubmitting={isSubmittingForm}
       />
     );
   }
